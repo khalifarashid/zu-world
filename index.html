@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ZU World</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;600;700&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one phone-sized app — top bar, search, full-bleed campus map with a bottom sheet, tab bar. Single committed look (navy chrome, light map). */
+:root{
+  --navy:#13263B; --navy2:#1E3956; --navy3:#2C4A6B;
+  --gold:#E0B04A; --busy:#C2412D; --free:#FFFFFF;
+  --ground:#DCE3EA; --walk:#F3F6F9; --bldg:#C3CFDB; --line:#9DAEC0;
+  --panel:#F7F9FB; --ink:#13263B; --muted:#56657A; --soft:#E7EDF3;
+  --office:#CFDCEA; --facility:#F2DFA9;
+  --desk:#0D1B2B;
+  --display:'Rubik', 'Trebuchet MS', Arial, sans-serif;
+  --body:'Public Sans', Arial, sans-serif;
+  color-scheme: light;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:var(--body);display:flex;align-items:center;justify-content:center;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:16px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.app{position:relative;width:min(410px,100%);height:100%;max-height:860px;background:var(--panel);border-radius:28px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+@media (max-width:480px){.app{border-radius:18px}}
+
+/* top bar */
+.top{background:var(--navy);color:#F5F3EE;padding:14px 16px 12px;display:flex;flex-direction:column;gap:12px;z-index:5}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.2px;display:flex;align-items:center;gap:8px}
+.brand i{width:10px;height:10px;border-radius:3px;background:var(--gold);display:inline-block}
+.clock{background:var(--navy2);border:1px solid var(--navy3);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:#F5F3EE}
+.clock span{color:var(--gold)}
+.search{position:relative}
+.search input{width:100%;border:0;border-radius:12px;padding:11px 14px 11px 38px;font:inherit;font-size:15px;background:#F5F3EE;color:var(--ink)}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px}
+.results{position:absolute;left:0;right:0;top:calc(100% + 6px);background:#fff;border-radius:12px;box-shadow:0 12px 30px rgba(19,38,59,.25);overflow:hidden;z-index:20;max-height:340px;overflow-y:auto}
+.res{display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:0;background:none;padding:10px 14px;border-bottom:1px solid var(--soft)}
+.res:hover,.res:focus-visible{background:var(--soft)}
+.res b{display:block;font-size:14px}
+.res small{color:var(--muted);font-size:12px}
+.dot{width:12px;height:12px;border-radius:4px;flex:none;border:1px solid var(--line)}
+.timepop{background:var(--navy2);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.timepop input{width:100%;accent-color:var(--gold)}
+.timepop p{margin:0;color:#B9C6D3}
+
+/* map */
+main{position:relative;flex:1;min-height:0}
+#map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;background:var(--ground);font-family:var(--body);cursor:grab;display:block}
+#map:active{cursor:grabbing}
+.rooms{opacity:0;pointer-events:none;transition:opacity .25s}
+.zoomed .rooms{opacity:1;pointer-events:auto}
+.blabel{transition:opacity .25s}
+.zoomed .blabel{opacity:0}
+.rlabel{opacity:0;transition:opacity .2s;pointer-events:none}
+.labels .rlabel{opacity:1}
+.room{cursor:pointer}
+.room.sel{stroke:var(--gold);stroke-width:3}
+.route{fill:none;stroke:var(--navy);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:2 9;animation:march 1s linear infinite}
+@keyframes march{to{stroke-dashoffset:-11}}
+.you-pulse{animation:pulse 1.8s ease-out infinite;transform-origin:center;transform-box:fill-box}
+@keyframes pulse{0%{opacity:.55;transform:scale(.6)}100%{opacity:0;transform:scale(2.2)}}
+@media (prefers-reduced-motion:reduce){.route,.you-pulse{animation:none}}
+
+.ctrls{position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:8px}
+.ctrl{width:40px;height:40px;border-radius:12px;border:0;background:#fff;box-shadow:0 4px 12px rgba(19,38,59,.18);font-size:20px;font-weight:600;display:grid;place-items:center}
+.floors{position:absolute;left:12px;top:12px;background:#fff;border-radius:12px;box-shadow:0 4px 12px rgba(19,38,59,.18);display:flex;flex-direction:column;overflow:hidden}
+.floors p{margin:0;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);text-align:center;padding:6px 0 2px}
+.floors button{width:40px;height:36px;border:0;background:none;font-weight:600;font-family:var(--display)}
+.floors button[aria-pressed="true"]{background:var(--navy);color:#fff}
+.legend{position:absolute;left:12px;bottom:12px;background:rgba(255,255,255,.94);border-radius:10px;padding:7px 10px;display:flex;gap:10px;font-size:11.5px;align-items:center;box-shadow:0 4px 12px rgba(19,38,59,.15)}
+.legend span{display:flex;gap:5px;align-items:center}
+.hint{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--navy);color:#fff;font-size:12px;padding:6px 12px;border-radius:999px;white-space:nowrap;transition:opacity .3s;pointer-events:none}
+
+/* sheet */
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -10px 30px rgba(19,38,59,.22);padding:10px 18px 18px;display:flex;flex-direction:column;gap:12px;max-height:62%;overflow-y:auto;transform:translateY(105%);transition:transform .3s ease;z-index:6}
+.sheet.open{transform:none}
+.grab{width:40px;height:4px;border-radius:4px;background:var(--line);align-self:center}
+.sh-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.eyebrow{margin:0;font-size:11.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:600}
+.sheet h2{margin:2px 0 0;font-family:var(--display);font-size:26px;font-weight:600;text-wrap:balance}
+.sheet h2 small{display:block;font-family:var(--body);font-size:14px;font-weight:500;color:var(--muted);margin-top:2px}
+.x{border:0;background:var(--soft);width:32px;height:32px;border-radius:50%;font-size:16px;flex:none}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:5px 10px;border-radius:999px;align-self:flex-start}
+.pill.free{background:#EAF1F7;color:var(--navy);border:1px solid var(--line)}
+.pill.busy{background:#F8E3DF;color:#8E2A1B}
+.pill.neutral{background:var(--soft);color:var(--navy)}
+.pill i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.detail{margin:0;font-size:14.5px;line-height:1.5;color:var(--ink)}
+.detail span{color:var(--muted)}
+.actions{display:flex;gap:10px}
+.btn{flex:1;border:0;border-radius:12px;padding:12px 14px;font-weight:600;font-size:15px}
+.btn.primary{background:var(--navy);color:#fff}
+.btn.ghost{background:var(--soft);color:var(--navy)}
+.trip{display:flex;gap:18px;align-items:baseline}
+.trip b{font-family:var(--display);font-size:28px;font-variant-numeric:tabular-nums}
+.trip span{color:var(--muted);font-size:13px}
+.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;counter-reset:s}
+.steps li{display:flex;gap:10px;font-size:14px;line-height:1.45;counter-increment:s}
+.steps li::before{content:counter(s);flex:none;width:22px;height:22px;border-radius:50%;background:var(--gold);color:var(--navy);font-weight:700;font-size:12px;display:grid;place-items:center}
+
+/* panels */
+.panel{position:absolute;inset:0;background:var(--panel);overflow-y:auto;padding:18px 16px 24px;display:flex;flex-direction:column;gap:14px;z-index:7}
+.panel h2{margin:0;font-family:var(--display);font-size:24px}
+.panel .sub{margin:-8px 0 0;color:var(--muted);font-size:13.5px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600}
+.chip[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+.list{display:flex;flex-direction:column;background:#fff;border-radius:14px;border:1px solid var(--soft);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;border:0;background:none;text-align:left;padding:12px 14px;border-bottom:1px solid var(--soft);width:100%}
+.row:last-child{border-bottom:0}
+.row:hover{background:#F2F6FA}
+.row .meta{flex:1;min-width:0}
+.row b{font-family:var(--display);font-weight:600;font-size:16px}
+.row small{display:block;color:var(--muted);font-size:12.5px}
+.row .until{font-size:12.5px;font-weight:600;color:var(--navy);white-space:nowrap;font-variant-numeric:tabular-nums}
+.card{background:#fff;border:1px solid var(--soft);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.card p{margin:0;font-size:14px;line-height:1.5}
+.note{font-size:12px;color:var(--muted);line-height:1.5}
+
+/* toast */
+.toast{position:absolute;left:12px;right:12px;top:12px;background:var(--navy);color:#F5F3EE;border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 14px 30px rgba(0,0,0,.35);z-index:30;transform:translateY(-140%);transition:transform .35s ease;border:0;text-align:left;width:auto}
+.toast.show{transform:none}
+.toast .av{width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--navy);display:grid;place-items:center;font-weight:700;font-family:var(--display);flex:none}
+.toast b{display:block;font-size:14px}
+.toast small{color:#B9C6D3;font-size:12.5px;line-height:1.4;display:block}
+
+/* tabs */
+nav{display:flex;background:#fff;border-top:1px solid var(--soft);z-index:8}
+nav button{flex:1;border:0;background:none;padding:10px 0 12px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;font-weight:600;color:var(--muted);position:relative}
+nav button svg{width:22px;height:22px}
+nav button[aria-selected="true"]{color:var(--navy)}
+nav button[aria-selected="true"]::after{content:"";position:absolute;top:0;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--gold)}
+.badge{position:absolute;top:5px;left:calc(50% + 6px);background:var(--busy);color:#fff;font-size:10px;border-radius:999px;padding:1px 5px;font-variant-numeric:tabular-nums}
+.badge.ok{background:var(--navy)}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <header class="top">
+    <div class="top-row">
+      <div class="brand"><i></i>ZU World</div>
+      <button class="clock" id="clockBtn" aria-expanded="false" aria-controls="timePop">Tue · <span id="clockTxt">10:30</span> ▾</button>
+    </div>
+    <div class="timepop" id="timePop" hidden>
+      <label for="time">Demo time: <b id="timeLbl">10:30</b></label>
+      <input type="range" id="time" min="480" max="1185" step="15" value="630">
+      <p>Drag to see rooms turn free or busy across the day.</p>
+    </div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#56657A" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <input id="q" type="search" placeholder="Search rooms, offices, restrooms…" autocomplete="off" aria-label="Search the campus">
+      <div class="results" id="results" hidden></div>
+    </div>
+  </header>
+
+  <main>
+    <svg id="map" aria-label="ZU campus map"><g id="world"></g></svg>
+    <div class="hint" id="hint">Zoom in to see live room status</div>
+    <div class="floors" role="group" aria-label="Floor">
+      <p>Floor</p>
+      <button data-f="2" aria-pressed="false">2</button>
+      <button data-f="1" aria-pressed="false">1</button>
+      <button data-f="0" aria-pressed="true">G</button>
+    </div>
+    <div class="ctrls">
+      <button class="ctrl" id="zin" aria-label="Zoom in">+</button>
+      <button class="ctrl" id="zout" aria-label="Zoom out">−</button>
+      <button class="ctrl" id="me" aria-label="Show my location"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#13263B" stroke-width="2.4"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+    </div>
+    <div class="legend" id="legend">
+      <span><i class="dot" style="background:var(--free)"></i>Free</span>
+      <span><i class="dot" style="background:var(--busy);border-color:var(--busy)"></i>In use</span>
+      <span><i class="dot" style="background:var(--office)"></i>Office</span>
+      <span><i class="dot" style="background:var(--facility)"></i>Service</span>
+    </div>
+    <section class="sheet" id="sheet" aria-live="polite"></section>
+
+    <section class="panel" id="freePanel" hidden>
+      <h2>Free right now</h2>
+      <p class="sub" id="freeSub"></p>
+      <div class="chips" id="freeChips">
+        <button class="chip" data-k="all" aria-pressed="true">All</button>
+        <button class="chip" data-k="class" aria-pressed="false">Classrooms</button>
+        <button class="chip" data-k="study" aria-pressed="false">Study rooms</button>
+        <button class="chip" data-k="lab" aria-pressed="false">Labs</button>
+      </div>
+      <div class="list" id="freeList"></div>
+    </section>
+
+    <section class="panel" id="alertPanel" hidden>
+      <h2>Alerts</h2>
+      <p class="sub">Pings from your doctors land here.</p>
+      <div class="card">
+        <p><b>Try the office ping</b></p>
+        <p>A doctor taps “Ping student” from their office. You get a notification that opens the route to their door.</p>
+        <button class="btn primary" id="simPing">Simulate a ping from a doctor</button>
+      </div>
+      <div class="list" id="pingList"></div>
+      <p class="note">Prototype for the ZU World capstone. Building layout is illustrative and timetable data is sample data, not ZU’s real schedule.</p>
+    </section>
+
+    <button class="toast" id="toast" aria-live="assertive">
+      <span class="av">MA</span>
+      <span><b>Dr. Mariam Al Hosani pinged you</b><small>“Please come to my office.” C3-207 · Tap for directions</small></span>
+    </button>
+  </main>
+
+  <nav role="tablist">
+    <button role="tab" aria-selected="true" data-tab="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>Map</button>
+    <button role="tab" aria-selected="false" data-tab="free"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>Free rooms<span class="badge ok" id="freeBadge">0</span></button>
+    <button role="tab" aria-selected="false" data-tab="alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>Alerts<span class="badge" id="alertBadge" hidden>1</span></button>
+  </nav>
+</div>
+
+<script>
+(() => {
+const NS = 'http://www.w3.org/2000/svg';
+const $ = s => document.querySelector(s);
+const svg = $('#map'), world = $('#world');
+
+/* ---------- campus data (illustrative) ---------- */
+const B = [
+  {c:'LIB', name:'Library', short:'Library', x:380, y:110, w:240, h:150, n:6, side:'n'},
+  {c:'C1', name:'College of Business', short:'Business', x:100, y:270, w:220, h:150, n:5, side:'w'},
+  {c:'C2', name:'College of Communication & Media Sciences', short:'Comm. & Media', x:100, y:450, w:220, h:150, n:5, side:'w'},
+  {c:'C3', name:'College of Humanities & Social Sciences', short:'Humanities', x:100, y:630, w:220, h:150, n:5, side:'w'},
+  {c:'C4', name:'College of Technological Innovation', short:'Tech. Innovation', x:680, y:270, w:220, h:150, n:5, side:'e'},
+  {c:'C5', name:'College of Natural & Health Sciences', short:'Health Sciences', x:680, y:450, w:220, h:150, n:5, side:'e'},
+  {c:'C6', name:'Student Hub', short:'Student Hub', x:680, y:630, w:220, h:150, n:5, side:'e'},
+  {c:'CC', name:'Convention Centre', short:'Convention Centre', x:380, y:810, w:240, h:130, n:3, side:'s', floors:[0]}
+];
+const PARK = [
+  {id:'P1', x:15, y:270, w:62, h:240}, {id:'P2', x:15, y:540, w:62, h:240},
+  {id:'P3', x:923, y:270, w:62, h:240}, {id:'P4', x:923, y:540, w:62, h:240},
+  {id:'P5', x:150, y:22, w:200, h:62}, {id:'P6', x:650, y:22, w:200, h:62}
+];
+const YOU = {x:500, y:560};
+const COURSES = [
+  ['IBS361','Leading & Transforming Organizations'],['IBS381','Positive Organizational Development'],
+  ['ISS364','Global Development & Applied Economics'],['ISS430','Energy Governance'],
+  ['COM210','Media Writing'],['MKT201','Principles of Marketing'],['ITC220','Mobile App Development'],
+  ['HSS150','Emirati Studies'],['MTH110','Statistics'],['ENG140','Academic Writing'],['SCI120','Human Biology']
+];
+const DOCS = ['Dr. Ahmed Al Mansoori','Dr. Sara Khoury','Dr. Omar Haddad','Dr. Layla Ibrahim','Dr. James Carter','Dr. Noura Al Ketbi','Dr. Fatima Al Shamsi','Dr. Hassan Al Marzouqi'];
+const EVENTS = ['Career Fair','Guest Lecture','Student Council Meeting','Innovation Showcase'];
+const TYPE = {class:'Classroom', lab:'Lab', study:'Study room', office:'Faculty office', wc:'Restroom', facility:'Service', hall:'Event hall'};
+const ALIAS = {wc:'restroom toilet bathroom wc washroom', study:'study quiet group', lab:'lab computer', class:'class classroom lecture'};
+
+const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; };
+const pad = n => String(n).padStart(2,'0');
+const hm = m => `${Math.floor(m/60)}:${pad(m%60)}`;
+const floorName = f => f === 0 ? 'Ground floor' : `Floor ${f}`;
+
+const ROOMS = [];
+function typeFor(b, f, i){
+  const top = i < b.n;
+  if (b.c === 'LIB') {
+    if (f === 0) return [['facility','Help Desk','Help Desk'],['study','Reading Hall','Reading'],['study'],['study'],['wc'],['study'],['study'],['study'],['study'],['study'],['study'],['facility','Book Return','Returns']][i];
+    return i === 5 ? ['wc'] : ['study'];
+  }
+  if (b.c === 'CC') return [['hall','Hall A','Hall A'],['hall','Hall B','Hall B'],['hall','Hall C','Hall C'],['facility','Main Foyer','Foyer'],['wc'],['hall','Auditorium','Auditor.']][i];
+  if (b.c === 'C6' && f === 0) return [['facility','Canteen','Canteen'],['facility','IT Help Desk','IT Desk'],['facility','Student Services','Services'],['study'],['wc'],['facility','Clinic','Clinic'],['facility','Prayer Room','Prayer'],['study'],['study'],['facility','Bookshop','Books']][i];
+  const topRow = ['class','class','lab','class','wc'], botRow = ['office','office','class','class', f === 0 ? 'facility' : 'study'];
+  const t = top ? topRow[i] : botRow[i - b.n];
+  if (t === 'facility') return ['facility','Prayer Room','Prayer'];
+  return [t];
+}
+B.forEach(b => {
+  const floors = b.floors || [0,1,2];
+  const mid = b.y + b.h/2, rw = (b.w - 12) / b.n;
+  floors.forEach(f => {
+    for (let i = 0; i < b.n * 2; i++) {
+      const top = i < b.n, col = top ? i : i - b.n;
+      const [t, name, short] = typeFor(b, f, i);
+      const id = `${b.c}-${f === 0 ? 'G' : f}${pad(i+1)}`;
+      const r = {id, b, f, t, name: name || TYPE[t], short, top,
+        x: b.x + 6 + col*rw + 1.5, w: rw - 3,
+        y: top ? b.y + 6 : mid + 12, h: top ? (b.h/2 - 18) : (b.h/2 - 18)};
+      r.cx = r.x + r.w/2; r.cy = r.y + r.h/2;
+      if (t === 'office') r.doc = id === 'C3-207' ? 'Dr. Mariam Al Hosani' : DOCS[Math.floor(hash(id)*DOCS.length)];
+      ROOMS.push(r);
+    }
+  });
+});
+const byId = Object.fromEntries(ROOMS.map(r => [r.id, r]));
+
+/* ---------- live status from the (sample) timetable ---------- */
+const P = {class:.55, lab:.5, study:.45, hall:.3};
+const busyAt = (r, s) => s >= 8 && s < 20 && hash(r.id + '@' + s) < P[r.t];
+function status(r, m){
+  const s = Math.floor(m/60);
+  if (P[r.t] !== undefined) {
+    if (busyAt(r, s)) {
+      let e = s + 1; while (e < 20 && busyAt(r, e)) e++;
+      let label, line;
+      if (r.t === 'study') { label = 'Booked'; line = `Booked by a student group · until ${e}:00`; }
+      else if (r.t === 'hall') { label = 'Event on'; line = `${EVENTS[Math.floor(hash(r.id+'#'+s)*EVENTS.length)]} · until ${e}:00`; }
+      else { const c = COURSES[Math.floor(hash(r.id+'#'+s)*COURSES.length)], d = DOCS[Math.floor(hash(r.id+'%'+s)*DOCS.length)];
+        label = 'In class'; line = `${c[0]} ${c[1]} · ${d} · until ${e}:00`; }
+      return {busy:true, label, line, until:e};
+    }
+    let e = s + 1; while (e < 20 && !busyAt(r, e)) e++;
+    return {busy:false, label:'Free', line: e >= 20 ? 'Free for the rest of the day' : `Free until ${e}:00`, until:e};
+  }
+  if (r.t === 'office') {
+    const inNow = r.id === 'C3-207' || hash(r.id + '!' + s) < .6;
+    return {busy:false, neutral:true, label: inNow ? 'Doctor in' : 'Away', line: inNow ? `${r.doc} · office hours now` : `${r.doc} · back at ${s+1}:00`};
+  }
+  return {busy:false, neutral:true, label:'Open', line: r.t === 'wc' ? 'Open all day' : 'Open 8:00 – 20:00'};
+}
+const fillFor = (r, st) => r.t === 'office' || r.t === 'wc' ? 'var(--office)' : r.t === 'facility' ? 'var(--facility)' : st.busy ? 'var(--busy)' : 'var(--free)';
+
+/* ---------- state ---------- */
+const S = {m: 630, floor: 0, sel: null, view:{x:0,y:0,k:1}, kMin:.3, chip:'all', pings:[]};
+
+/* ---------- draw ---------- */
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) { const v = String(attrs[k]); if ((k === 'fill' || k === 'stroke') && v.startsWith('var(')) e.style[k] = v; else e.setAttribute(k, v); } if (parent) parent.appendChild(e); return e; };
+function drawBase(){
+  el('rect', {x:-400, y:-400, width:1800, height:1800, fill:'var(--ground)'}, world);
+  el('rect', {x:335, y:270, width:330, height:530, rx:24, fill:'var(--walk)', stroke:'var(--line)', 'stroke-width':1}, world);
+  el('rect', {x:485, y:0, width:30, height:110, fill:'var(--walk)'}, world);
+  el('text', {x:500, y:430, 'text-anchor':'middle', 'font-size':15, fill:'#7C8DA2', 'font-weight':600, 'letter-spacing':2}, world).textContent = 'CENTRAL COURTYARD';
+  el('text', {x:500, y:-14, 'text-anchor':'middle', 'font-size':13, fill:'#7C8DA2', 'font-weight':600}, world).textContent = 'MAIN GATE';
+  PARK.forEach(p => {
+    const g = el('g', {'data-park':p.id, class:'room'}, world);
+    el('rect', {x:p.x, y:p.y, width:p.w, height:p.h, rx:6, fill:'#C9D3DD', stroke:'var(--line)', 'stroke-dasharray':'4 4'}, g);
+    el('text', {x:p.x + p.w/2, y:p.y + p.h/2 + 7, 'text-anchor':'middle', 'font-size':20, 'font-weight':700, fill:'#5B6E84', 'font-family':'Rubik, Arial'}, g).textContent = p.id;
+  });
+  B.forEach(b => {
+    const g = el('g', {'data-b':b.c}, world);
+    el('rect', {x:b.x, y:b.y, width:b.w, height:b.h, rx:8, fill:'var(--bldg)', stroke:'#7F93A8', 'stroke-width':1.5, class:'room'}, g);
+    el('rect', {x:b.x + 6, y:b.y + b.h/2 - 10, width:b.w - 12, height:20, fill:'#E9EEF3'}, g);
+    const lb = el('g', {class:'blabel', 'pointer-events':'none'}, g);
+    el('text', {x:b.x + b.w/2, y:b.y + b.h/2 - 4, 'text-anchor':'middle', 'font-size':34, 'font-weight':700, fill:'var(--navy)', 'font-family':'Rubik, Arial'}, lb).textContent = b.c;
+    el('text', {x:b.x + b.w/2, y:b.y + b.h/2 + 24, 'text-anchor':'middle', 'font-size':16, 'font-weight':600, fill:'var(--navy)'}, lb).textContent = b.short;
+  });
+  el('g', {id:'roomsLayer', class:'rooms'}, world);
+  el('g', {id:'routeLayer'}, world);
+  const you = el('g', {id:'you', 'pointer-events':'none'}, world);
+  el('circle', {cx:YOU.x, cy:YOU.y, r:14, fill:'var(--gold)', class:'you-pulse'}, you);
+  el('circle', {cx:YOU.x, cy:YOU.y, r:8, fill:'var(--gold)', stroke:'#fff', 'stroke-width':3}, you);
+  el('text', {x:YOU.x, y:YOU.y + 26, 'text-anchor':'middle', 'font-size':11, 'font-weight':700, fill:'var(--navy)'}, you).textContent = 'You';
+}
+function drawRooms(){
+  const L = $('#roomsLayer'); L.replaceChildren();
+  B.forEach(b => {
+    if (b.floors && !b.floors.includes(S.floor)) {
+      el('rect', {x:b.x+6, y:b.y+6, width:b.w-12, height:b.h-12, fill:'#D3DBE3', rx:4}, L);
+      el('text', {x:b.x + b.w/2, y:b.y + b.h/2 + 5, 'text-anchor':'middle', 'font-size':12, fill:'var(--muted)'}, L).textContent = `${b.c}: ground floor only`;
+    }
+  });
+  ROOMS.filter(r => r.f === S.floor).forEach(r => {
+    const st = status(r, S.m);
+    const g = el('g', {'data-room':r.id, class:'room' + (S.sel === r ? ' sel' : '')}, L);
+    el('rect', {x:r.x, y:r.y, width:r.w, height:r.h, rx:3, fill:fillFor(r, st), stroke: S.sel === r ? 'var(--gold)' : '#8FA2B6', 'stroke-width': S.sel === r ? 3 : .8}, g);
+    const dark = st.busy && !(r.t === 'office' || r.t === 'wc' || r.t === 'facility');
+    const t = el('text', {x:r.cx, y:r.cy + 2.5, 'text-anchor':'middle', 'font-size':r.short ? 6.4 : 7.5, 'font-weight':600, fill: dark ? '#FFFFFF' : 'var(--navy)', class:'rlabel'}, g);
+    t.textContent = r.short || (r.t === 'wc' ? 'WC' : r.id.split('-')[1]);
+  });
+  document.querySelectorAll('.floors button').forEach(btn => btn.setAttribute('aria-pressed', String(+btn.dataset.f === S.floor)));
+}
+
+/* ---------- view / gestures ---------- */
+function size(){ const r = svg.getBoundingClientRect(); return {w:r.width, h:r.height, left:r.left, top:r.top}; }
+function apply(){
+  const v = S.view;
+  world.setAttribute('transform', `translate(${v.x} ${v.y}) scale(${v.k})`);
+  svg.classList.toggle('zoomed', v.k >= 1.05);
+  svg.classList.toggle('labels', v.k >= 1.7);
+  $('#hint').style.opacity = v.k >= 1.05 ? 0 : 1;
+}
+const clampK = k => Math.min(6, Math.max(S.kMin, k));
+function zoomAt(px, py, f){
+  const v = S.view, nk = clampK(v.k * f), wx = (px - v.x)/v.k, wy = (py - v.y)/v.k;
+  v.k = nk; v.x = px - wx*nk; v.y = py - wy*nk; apply();
+}
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function flyTo(wx, wy, k, yFrac = .34){
+  const {w, h} = size(), v = S.view, from = {...v}, to = {k, x: w/2 - wx*k, y: h*yFrac - wy*k};
+  if (reduce) { Object.assign(v, to); apply(); return; }
+  const t0 = performance.now(), D = 520;
+  const step = now => { const p = Math.min(1, (now - t0)/D), e = 1 - Math.pow(1-p, 3);
+    v.k = from.k + (to.k - from.k)*e; v.x = from.x + (to.x - from.x)*e; v.y = from.y + (to.y - from.y)*e; apply();
+    if (p < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+const pts = new Map(); let start = null, moved = false, pinch = null;
+svg.addEventListener('pointerdown', e => {
+  svg.setPointerCapture(e.pointerId); pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if (pts.size === 1) { start = {x:e.clientX, y:e.clientY}; moved = false; }
+  if (pts.size === 2) { const [a, b] = [...pts.values()], s = size(), mx = (a.x+b.x)/2 - s.left, my = (a.y+b.y)/2 - s.top;
+    pinch = {d: Math.hypot(a.x-b.x, a.y-b.y), k: S.view.k, wx:(mx - S.view.x)/S.view.k, wy:(my - S.view.y)/S.view.k}; moved = true; }
+});
+svg.addEventListener('pointermove', e => {
+  if (!pts.has(e.pointerId)) return;
+  const prev = pts.get(e.pointerId); pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  if (pts.size === 1) {
+    S.view.x += e.clientX - prev.x; S.view.y += e.clientY - prev.y;
+    if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) moved = true; apply();
+  } else if (pts.size === 2 && pinch) {
+    const [a, b] = [...pts.values()], s = size(), mx = (a.x+b.x)/2 - s.left, my = (a.y+b.y)/2 - s.top;
+    const k = clampK(pinch.k * Math.hypot(a.x-b.x, a.y-b.y) / pinch.d);
+    S.view.k = k; S.view.x = mx - pinch.wx*k; S.view.y = my - pinch.wy*k; apply();
+  }
+});
+const up = e => {
+  if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId);
+  if (pts.size < 2) pinch = null;
+  if (pts.size === 1) { start = {...[...pts.values()][0]}; }
+  if (pts.size === 0 && !moved && e.type === 'pointerup') tap(document.elementFromPoint(e.clientX, e.clientY));
+};
+svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
+svg.addEventListener('wheel', e => { e.preventDefault(); const s = size(); zoomAt(e.clientX - s.left, e.clientY - s.top, Math.exp(-e.deltaY * .0015)); }, {passive:false});
+$('#zin').onclick = () => { const s = size(); zoomAt(s.w/2, s.h/2, 1.5); };
+$('#zout').onclick = () => { const s = size(); zoomAt(s.w/2, s.h/2, 1/1.5); };
+$('#me').onclick = () => flyTo(YOU.x, YOU.y, Math.max(S.view.k, 1.4), .5);
+
+function tap(t){
+  if (!t) return;
+  const room = t.closest && t.closest('[data-room]');
+  if (room) return selectRoom(byId[room.dataset.room]);
+  const park = t.closest && t.closest('[data-park]');
+  if (park) return showParking(park.dataset.park);
+  const b = t.closest && t.closest('[data-b]');
+  if (b) { const bb = B.find(x => x.c === b.dataset.b); if (bb.floors && !bb.floors.includes(S.floor)) setFloor(0); flyTo(bb.x + bb.w/2, bb.y + bb.h/2, 2.2); showBuilding(bb); return; }
+  closeSheet();
+}
+
+/* ---------- sheet ---------- */
+const sheet = $('#sheet');
+function openSheet(html){ sheet.innerHTML = '<div class="grab"></div>' + html; sheet.classList.add('open'); const x = sheet.querySelector('.x'); if (x) x.onclick = closeSheet; }
+function closeSheet(){ sheet.classList.remove('open'); if (S.sel) { S.sel = null; drawRooms(); } $('#routeLayer').replaceChildren(); }
+function pillHTML(st){ const cls = st.busy ? 'busy' : st.neutral ? 'neutral' : 'free';
+  const c = st.busy ? 'var(--busy)' : st.neutral ? 'var(--navy3)' : '#fff; border:1px solid var(--line)';
+  return `<span class="pill ${cls}"><i style="background:${c}"></i>${st.label}</span>`; }
+function roomSheet(r){
+  const st = status(r, S.m);
+  openSheet(`<div class="sh-head"><div><p class="eyebrow">${r.b.c} · ${r.b.short} · ${floorName(r.f)}</p>
+    <h2>${r.t === 'office' ? r.doc : r.id}<small>${r.t === 'office' ? 'Office ' + r.id : r.name}</small></h2></div><button class="x" aria-label="Close">✕</button></div>
+    ${pillHTML(st)}<p class="detail">${st.line}</p>
+    <div class="actions"><button class="btn primary" id="go">Take me there</button>${r.t === 'office' ? '<button class="btn ghost" id="copy">Copy room</button>' : ''}</div>`);
+  $('#go').onclick = () => route(r);
+  const c = $('#copy'); if (c) c.onclick = () => { navigator.clipboard?.writeText(`${r.doc}'s office: ${r.id}, ${r.b.name}, ${floorName(r.f)}`).then(() => c.textContent = 'Copied', () => c.textContent = r.id); };
+}
+function selectRoom(r){
+  S.sel = r; if (S.floor !== r.f) S.floor = r.f; drawRooms();
+  $('#routeLayer').replaceChildren(); switchTab('map');
+  flyTo(r.cx, r.cy, Math.max(S.view.k, 2.6)); roomSheet(r);
+}
+function showBuilding(b){
+  const rs = ROOMS.filter(r => r.b === b && r.f === S.floor), st = rs.map(r => status(r, S.m));
+  const free = rs.filter((r,i) => P[r.t] !== undefined && !st[i].busy).length, busy = st.filter(s => s.busy).length;
+  openSheet(`<div class="sh-head"><div><p class="eyebrow">${b.c} · ${floorName(S.floor)}</p><h2>${b.name}</h2></div><button class="x" aria-label="Close">✕</button></div>
+    <p class="detail"><b>${free}</b> free rooms <span>·</span> <b>${busy}</b> in use on this floor right now.</p>
+    <p class="detail"><span>Tap a room for details, or switch floors on the left.</span></p>`);
+}
+function showParking(id){
+  openSheet(`<div class="sh-head"><div><p class="eyebrow">Parking</p><h2>Car park ${id}</h2></div><button class="x" aria-label="Close">✕</button></div>
+    <span class="pill neutral"><i style="background:var(--gold)"></i>Coming in Phase 2</span>
+    <p class="detail">Live green / red parking status, so you know a lot is full before you reach the gate.</p>`);
+}
+
+/* ---------- routing ---------- */
+function route(r){
+  const b = r.b, mid = b.y + b.h/2, pts2 = [[YOU.x, YOU.y]];
+  const edge = r.top ? r.y + r.h : r.y;
+  if (b.side === 'w') { pts2.push([340, YOU.y],[340, mid],[b.x + b.w, mid],[r.cx, mid],[r.cx, edge]); }
+  else if (b.side === 'e') { pts2.push([660, YOU.y],[660, mid],[b.x, mid],[r.cx, mid],[r.cx, edge]); }
+  else if (b.side === 'n') { pts2.push([500, b.y + b.h + 10],[500, b.y + b.h],[500, mid],[r.cx, mid],[r.cx, edge]); }
+  else { pts2.push([500, b.y - 10],[500, b.y],[500, mid],[r.cx, mid],[r.cx, edge]); }
+  const L = $('#routeLayer'); L.replaceChildren();
+  el('polyline', {points: pts2.map(p => p.join(',')).join(' '), class:'route'}, L);
+  el('circle', {cx:r.cx, cy:edge, r:5, fill:'var(--navy)', stroke:'#fff', 'stroke-width':2}, L);
+  let d = 0; for (let i = 1; i < pts2.length; i++) d += Math.hypot(pts2[i][0]-pts2[i-1][0], pts2[i][1]-pts2[i-1][1]);
+  const meters = Math.round(d * .55 / 5) * 5 + r.f * 12, mins = Math.max(1, Math.round(meters / 75 + r.f * .5));
+  const dir = {w:'west', e:'east', n:'north', s:'south'}[b.side];
+  const sideTxt = b.side === 'w' ? (r.top ? 'right' : 'left') : b.side === 'e' ? (r.top ? 'left' : 'right') : (r.top ? 'left' : 'right');
+  const steps = [`Walk ${dir} across the Central Courtyard to ${b.c}`, `Enter ${b.name} by the courtyard door`];
+  if (r.f > 0) steps.push(`Take the stairs or lift to ${floorName(r.f)}`);
+  steps.push(`Follow the corridor. ${r.id} is on your ${sideTxt}`);
+  const k = Math.min(1.25, size().w / 560);
+  flyTo((YOU.x + r.cx)/2, (YOU.y + r.cy)/2, Math.max(.6, k), .3);
+  openSheet(`<div class="sh-head"><div><p class="eyebrow">Route to ${r.id}</p><h2>${r.t === 'office' ? r.doc + '’s office' : r.name}</h2></div><button class="x" aria-label="Close">✕</button></div>
+    <div class="trip"><div><b>${mins} min</b> <span>walk</span></div><div><b>${meters} m</b></div></div>
+    <ol class="steps">${steps.map(s => `<li>${s}</li>`).join('')}</ol>
+    <div class="actions"><button class="btn ghost" id="endRoute">End route</button><button class="btn primary" id="zoomDoor">Zoom to door</button></div>`);
+  $('#endRoute').onclick = closeSheet;
+  $('#zoomDoor').onclick = () => flyTo(r.cx, r.cy, 3);
+}
+
+/* ---------- search ---------- */
+const q = $('#q'), res = $('#results');
+const searchText = r => `${r.id} ${r.name} ${TYPE[r.t]} ${r.b.name} ${r.b.short} ${r.b.c} ${r.doc || ''} ${ALIAS[r.t] || ''} ${r.short || ''}`.toLowerCase();
+const INDEX = ROOMS.map(r => [r, searchText(r)]);
+q.addEventListener('input', () => {
+  const v = q.value.trim().toLowerCase();
+  if (!v) { res.hidden = true; return; }
+  const terms = v.split(/\s+/);
+  let hits = INDEX.filter(([, s]) => terms.every(t => s.includes(t))).map(([r]) => r);
+  hits.sort((a, b) => (a.f === S.floor ? 0 : 1) - (b.f === S.floor ? 0 : 1) || Math.hypot(a.cx-YOU.x, a.cy-YOU.y) - Math.hypot(b.cx-YOU.x, b.cy-YOU.y));
+  hits = hits.slice(0, 8);
+  res.innerHTML = hits.length ? hits.map(r => { const st = status(r, S.m);
+    return `<button class="res" data-id="${r.id}"><i class="dot" style="background:${fillFor(r, st)}"></i><span><b>${r.t === 'office' ? r.doc : r.name === TYPE[r.t] ? r.id : r.name}</b>
+      <small>${r.t === 'office' || r.name === TYPE[r.t] ? TYPE[r.t] + ' · ' : r.id + ' · '}${r.b.short} · ${floorName(r.f)} · ${st.label}</small></span></button>`; }).join('')
+    : `<p class="res" style="margin:0;color:var(--muted)">Nothing matches “${v.replace(/[<>&]/g,'')}”. Try a room number like C3-207.</p>`;
+  res.hidden = false;
+});
+res.addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (!b) return; res.hidden = true; q.value = ''; q.blur(); selectRoom(byId[b.dataset.id]); });
+document.addEventListener('pointerdown', e => { if (!e.target.closest('.search')) res.hidden = true; });
+
+/* ---------- floors / time ---------- */
+function setFloor(f){ S.floor = f; drawRooms(); }
+document.querySelectorAll('.floors button').forEach(b => b.onclick = () => { setFloor(+b.dataset.f); if (S.view.k < 1.05) { const s = size(); zoomAt(s.w/2, s.h/2, 1.4 / S.view.k); } });
+const clockBtn = $('#clockBtn'), pop = $('#timePop');
+clockBtn.onclick = () => { pop.hidden = !pop.hidden; clockBtn.setAttribute('aria-expanded', String(!pop.hidden)); };
+$('#time').addEventListener('input', e => {
+  S.m = +e.target.value; $('#clockTxt').textContent = hm(S.m); $('#timeLbl').textContent = hm(S.m);
+  drawRooms(); renderFree(); if (S.sel && sheet.classList.contains('open') && !$('#endRoute')) roomSheet(S.sel);
+});
+
+/* ---------- free rooms ---------- */
+function renderFree(){
+  const list = ROOMS.filter(r => (r.t === 'class' || r.t === 'study' || r.t === 'lab') && (S.chip === 'all' || r.t === S.chip))
+    .map(r => [r, status(r, S.m)]).filter(([, st]) => !st.busy)
+    .sort((a, b) => b[1].until - a[1].until || Math.hypot(a[0].cx-YOU.x, a[0].cy-YOU.y) - Math.hypot(b[0].cx-YOU.x, b[0].cy-YOU.y));
+  const all = ROOMS.filter(r => r.t === 'class' || r.t === 'study' || r.t === 'lab').filter(r => !status(r, S.m).busy).length;
+  $('#freeBadge').textContent = all;
+  $('#freeSub').textContent = `${list.length} rooms free at ${hm(S.m)} · longest free first`;
+  $('#freeList').innerHTML = list.slice(0, 40).map(([r, st]) => `<button class="row" data-id="${r.id}"><i class="dot" style="background:var(--free)"></i>
+    <span class="meta"><b>${r.id}</b><small>${TYPE[r.t]} · ${r.b.short} · ${floorName(r.f)}</small></span>
+    <span class="until">${st.until >= 20 ? 'All day' : 'Until ' + st.until + ':00'}</span></button>`).join('');
+}
+$('#freeList').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (b) selectRoom(byId[b.dataset.id]); });
+$('#freeChips').addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c) return; S.chip = c.dataset.k;
+  document.querySelectorAll('#freeChips .chip').forEach(x => x.setAttribute('aria-pressed', String(x === c))); renderFree(); });
+
+/* ---------- tabs ---------- */
+function switchTab(t){
+  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  $('#freePanel').hidden = t !== 'free'; $('#alertPanel').hidden = t !== 'alerts';
+  if (t === 'alerts') $('#alertBadge').hidden = true;
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+
+/* ---------- doctor ping ---------- */
+const toast = $('#toast'); let toastTimer;
+$('#simPing').onclick = () => {
+  switchTab('map'); closeSheet();
+  setTimeout(() => { toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 8000); }, 500);
+  S.pings.unshift(hm(S.m)); $('#alertBadge').hidden = false; $('#alertBadge').textContent = S.pings.length;
+  $('#pingList').innerHTML = S.pings.map(t => `<button class="row" data-id="C3-207"><span class="meta"><b>Dr. Mariam Al Hosani</b><small>“Please come to my office.” · C3-207</small></span><span class="until">${t}</span></button>`).join('');
+};
+$('#pingList').addEventListener('click', e => { if (e.target.closest('[data-id]')) { const r = byId['C3-207']; S.sel = r; S.floor = r.f; drawRooms(); switchTab('map'); route(r); } });
+toast.onclick = () => { toast.classList.remove('show'); $('#alertBadge').hidden = true; const r = byId['C3-207']; S.sel = r; S.floor = r.f; drawRooms(); route(r); };
+
+/* ---------- boot ---------- */
+drawBase(); drawRooms(); renderFree();
+function boot(){
+  const {w, h} = size(); if (!w || !h) return requestAnimationFrame(boot);
+  S.kMin = Math.min(w, h) / 1150;
+  const k = 1.25; S.view = {k, x: w/2 - 300*k, y: h*.45 - 520*k}; apply();
+}
+boot();
+})();
+</script>
+</body>
+</html>
