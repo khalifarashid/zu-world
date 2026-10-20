@@ -59,7 +59,9 @@ main{position:relative;flex:1;min-height:0;overflow:hidden}
 .zoomed .blabel{opacity:0}
 .rlabel{opacity:0;transition:opacity .2s;pointer-events:none}
 .labels .rlabel{opacity:1}
-.room{cursor:pointer}
+.hit{cursor:pointer}
+.btag{opacity:0;transition:opacity .25s}
+.zoomed .btag{opacity:1}
 .route{fill:none;stroke:var(--navy);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:2 9;animation:march 1s linear infinite}
 @keyframes march{to{stroke-dashoffset:-11}}
 .you-pulse{animation:pulse 1.8s ease-out infinite;transform-origin:center;transform-box:fill-box}
@@ -160,7 +162,7 @@ nav button[aria-selected="true"]::after{content:"";position:absolute;top:0;left:
     </div>
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="#56657A" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-      <input id="q" type="search" placeholder="Search rooms, offices, restrooms…" autocomplete="off" aria-label="Search the campus">
+      <input id="q" type="search" placeholder="Search F2, Library, Gate 9, restroom…" autocomplete="off" aria-label="Search the campus">
       <div class="results" id="results" hidden></div>
     </div>
   </header>
@@ -208,12 +210,12 @@ nav button[aria-selected="true"]::after{content:"";position:absolute;top:0;left:
         <button class="btn primary" id="simPing">Simulate a ping from a doctor</button>
       </div>
       <div class="list" id="pingList"></div>
-      <p class="note">Prototype for the ZU World capstone. Building layout is illustrative and timetable data is sample data, not ZU’s real schedule.</p>
+      <p class="note">Prototype for the ZU World capstone. Buildings, gates and car parks follow the ZU Abu Dhabi campus plan. Room layouts, doctors and the timetable are sample data.</p>
     </section>
 
     <div class="toast" id="toast" role="alert">
       <button class="toast-main" id="toastOpen"><span class="av">MA</span>
-      <span><b>Dr. Mariam Al Hosani pinged you</b><small>“Please come to my office.” C3-207 · Tap for directions</small></span></button>
+      <span><b>Dr. Mariam Al Hosani pinged you</b><small>“Please come to my office.” FF1-102 · Tap for directions</small></span></button>
       <button class="toast-x" id="toastClose" aria-label="Dismiss notification">✕</button>
     </div>
   </main>
@@ -231,23 +233,61 @@ const NS = 'http://www.w3.org/2000/svg';
 const $ = s => document.querySelector(s);
 const svg = $('#map'), world = $('#world');
 
-/* ---------- campus data (illustrative) ---------- */
+/* ---------- ZU Abu Dhabi campus, traced from the official campus plan ---------- */
+// kind: teach | sci | arts | act | fac | dine | lib | con | adm | sport | ecc | res | svc
 const B = [
-  {c:'LIB', name:'Library', short:'Library', x:380, y:110, w:240, h:150, n:6, side:'n'},
-  {c:'C1', name:'College of Business', short:'Business', x:100, y:270, w:220, h:150, n:5, side:'w'},
-  {c:'C2', name:'College of Communication & Media Sciences', short:'Comm. & Media', x:100, y:450, w:220, h:150, n:5, side:'w'},
-  {c:'C3', name:'College of Humanities & Social Sciences', short:'Humanities', x:100, y:630, w:220, h:150, n:5, side:'w'},
-  {c:'C4', name:'College of Technological Innovation', short:'Tech. Innovation', x:680, y:270, w:220, h:150, n:5, side:'e'},
-  {c:'C5', name:'College of Natural & Health Sciences', short:'Health Sciences', x:680, y:450, w:220, h:150, n:5, side:'e'},
-  {c:'C6', name:'Student Hub', short:'Student Hub', x:680, y:630, w:220, h:150, n:5, side:'e'},
-  {c:'CC', name:'Convention Centre', short:'Convention Centre', x:380, y:810, w:240, h:130, n:3, side:'s', floors:[0]}
+  {c:'CON', name:'Convention Centre', kind:'con', campus:'C', x:615, y:262, w:100, h:60, rx:28, floors:[0], inner:{x:630,y:272,w:70,h:40}},
+  {c:'ADM', name:'Administration Building', kind:'adm', campus:'C', x:605, y:328, w:150, h:36, rx:10, floors:[0,1]},
+  {c:'LIB', name:'Library', kind:'lib', campus:'C', x:632, y:490, w:96, h:80, rx:40, floors:[0,1], inner:{x:648,y:506,w:64,h:48}},
+  {c:'FIS', name:'Female Dining Hall / Interdisciplinary Studies', kind:'dine', campus:'F', x:566, y:463, w:96, h:26, floors:[0,1]},
+  {c:'MIS', name:'Male Dining Hall / Interdisciplinary Studies', kind:'dine', campus:'M', x:698, y:463, w:96, h:26, floors:[0,1]},
+  {c:'FF1', name:'Faculty Building FF1', kind:'fac', campus:'F', x:548, y:383, w:46, h:40},
+  {c:'FF2', name:'Faculty Building FF2', kind:'fac', campus:'F', x:545, y:425, w:46, h:30},
+  {c:'FF3', name:'Faculty Building FF3', kind:'fac', campus:'F', x:530, y:490, w:42, h:30},
+  {c:'F6', name:'Arts Building', kind:'arts', campus:'F', x:468, y:300, w:92, h:50},
+  {c:'F5', name:'Science Building', kind:'sci', campus:'F', x:465, y:354, w:80, h:40},
+  {c:'F2', name:'Teaching Building F2', kind:'teach', campus:'F', x:452, y:398, w:58, h:44},
+  {c:'F3', name:'Student Activities / Teaching Spaces F3', kind:'act', campus:'F', x:400, y:395, w:42, h:36},
+  {c:'F4', name:'Student Activities / Teaching Spaces F4', kind:'act', campus:'F', x:388, y:440, w:40, h:32},
+  {c:'F1', name:'Teaching Building F1', kind:'teach', campus:'F', x:440, y:460, w:62, h:44},
+  {c:'F8', name:'Teaching Building F8', kind:'teach', campus:'F', x:438, y:512, w:82, h:42},
+  {c:'F9', name:'Early Childhood Centre', kind:'ecc', campus:'F', x:440, y:558, w:58, h:34},
+  {c:'FSP', name:'Sports and Recreation Centre', kind:'sport', campus:'F', x:328, y:360, w:68, h:62, floors:[0]},
+  {c:'FR1', name:'Women’s Residence', kind:'res', campus:'F', x:352, y:478, w:48, h:110},
+  {c:'SV1', name:'Service Building 1', kind:'svc', campus:'F', x:85, y:505, w:90, h:64},
+  {c:'DCP1', name:'District Cooling Plant 1', kind:'svc', campus:'F', x:70, y:410, w:65, h:55},
+  {c:'MF1', name:'Faculty Building MF1', kind:'fac', campus:'M', x:752, y:383, w:46, h:40},
+  {c:'MF2', name:'Faculty Building MF2', kind:'fac', campus:'M', x:756, y:425, w:46, h:30},
+  {c:'MF3', name:'Faculty Building MF3', kind:'fac', campus:'M', x:770, y:490, w:42, h:30},
+  {c:'M2', name:'Teaching Building M2', kind:'teach', campus:'M', x:846, y:372, w:46, h:58},
+  {c:'M3', name:'Student Activities / Teaching Spaces M3', kind:'act', campus:'M', x:895, y:395, w:46, h:36},
+  {c:'M4', name:'Student Activities / Teaching Spaces M4', kind:'act', campus:'M', x:902, y:436, w:42, h:34},
+  {c:'M1', name:'Teaching Building M1', kind:'teach', campus:'M', x:866, y:460, w:52, h:46},
+  {c:'MR1', name:'Men’s Residence', kind:'res', campus:'M', x:940, y:480, w:48, h:96},
+  {c:'SV2', name:'Service Building 2', kind:'svc', campus:'M', x:1138, y:520, w:85, h:70},
+  {c:'DCP2', name:'District Cooling Plant 2', kind:'svc', campus:'M', x:1140, y:410, w:65, h:60}
+];
+const CAMPUS = {F:'Female campus', M:'Male campus', C:'Central campus'};
+const GATES = [
+  {n:1, x:315, y:132, rule:'No vehicle entry'}, {n:2, x:612, y:132, rule:'No vehicle entry'},
+  {n:3, x:652, y:132, rule:'Entry only'}, {n:4, x:692, y:132, rule:'Exit only'},
+  {n:5, x:735, y:132, rule:'No vehicle entry'}, {n:6, x:1050, y:132, rule:'No vehicle entry'},
+  {n:7, x:1128, y:692, rule:'Entry and exit'}, {n:8, x:862, y:692, rule:'Entry and exit'},
+  {n:9, x:476, y:692, rule:'Entry only'}, {n:10, x:215, y:692, rule:'Exit only'}
 ];
 const PARK = [
-  {id:'P1', x:15, y:270, w:62, h:240}, {id:'P2', x:15, y:540, w:62, h:240},
-  {id:'P3', x:923, y:270, w:62, h:240}, {id:'P4', x:923, y:540, w:62, h:240},
-  {id:'P5', x:150, y:22, w:200, h:62}, {id:'P6', x:650, y:22, w:200, h:62}
+  {id:'P1', x:318, y:185, w:90, h:58, g:1}, {id:'P2', x:412, y:195, w:86, h:58, g:1}, {id:'P3', x:505, y:220, w:64, h:48, g:2},
+  {id:'P4', x:770, y:225, w:70, h:48, g:5}, {id:'P5', x:850, y:195, w:84, h:58, g:6}, {id:'P6', x:937, y:185, w:84, h:58, g:6},
+  {id:'P7', x:225, y:478, w:104, h:126, g:10}, {id:'P8', x:312, y:606, w:98, h:48, g:9}, {id:'P9', x:542, y:560, w:46, h:100, g:9},
+  {id:'P10', x:752, y:560, w:46, h:100, g:8}, {id:'P11', x:950, y:602, w:98, h:52, g:8}, {id:'P12', x:1000, y:470, w:108, h:136, g:7},
+  {id:'P13', x:1140, y:610, w:64, h:48, g:7}
 ];
-const YOU = {x:500, y:560};
+const YOU = {x:680, y:445};
+const SPINE = {
+  F: [[680,445],[632,458.5],[540,458.5],[520,454],[440,449],[433,449]],
+  M: [[680,445],[728,458.5],[820,458.5],[840,454],[920,449],[946,449]]
+};
+
 const COURSES = [
   ['IBS361','Leading & Transforming Organizations'],['IBS381','Positive Organizational Development'],
   ['ISS364','Global Development & Applied Economics'],['ISS430','Energy Governance'],
@@ -255,49 +295,66 @@ const COURSES = [
   ['HSS150','Emirati Studies'],['MTH110','Statistics'],['ENG140','Academic Writing'],['SCI120','Human Biology']
 ];
 const DOCS = ['Dr. Ahmed Al Mansoori','Dr. Sara Khoury','Dr. Omar Haddad','Dr. Layla Ibrahim','Dr. James Carter','Dr. Noura Al Ketbi','Dr. Fatima Al Shamsi','Dr. Hassan Al Marzouqi'];
-const EVENTS = ['Career Fair','Guest Lecture','Student Council Meeting','Innovation Showcase'];
+const EVENTS = ['Career Fair','Guest Lecture','Student Council Meeting','Innovation Showcase','Graduation Rehearsal'];
 const TYPE = {class:'Classroom', lab:'Lab', study:'Study room', office:'Faculty office', wc:'Restroom', facility:'Service', hall:'Event hall'};
-const ALIAS = {wc:'restroom toilet bathroom wc washroom', study:'study quiet group', lab:'lab computer', class:'class classroom lecture'};
+const ALIAS = {wc:'restroom toilet bathroom wc washroom', study:'study quiet group', lab:'lab', class:'class classroom lecture', office:'office doctor professor faculty'};
+const PING = {doc:'Dr. Mariam Al Hosani', room:'FF1-102'};
 
 const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; };
 const pad = n => String(n).padStart(2,'0');
 const hm = m => `${Math.floor(m/60)}:${pad(m%60)}`;
 const floorName = f => f === 0 ? 'Ground floor' : `Floor ${f}`;
+const hasRooms = b => !['ecc','res','svc'].includes(b.kind);
+const floorsOf = b => hasRooms(b) ? (b.floors || [0,1,2]) : [0];
 
-const ROOMS = [];
-function typeFor(b, f, i){
-  const top = i < b.n;
-  if (b.c === 'LIB') {
-    if (f === 0) return [['facility','Help Desk','Help Desk'],['study','Reading Hall','Reading'],['study'],['study'],['wc'],['study'],['study'],['study'],['study'],['study'],['study'],['facility','Book Return','Returns']][i];
-    return i === 5 ? ['wc'] : ['study'];
+/* ---------- rooms (layouts illustrative) ---------- */
+const FAC = {
+  adm: [['Admissions','Admit'],['Registrar','Registr.'],['Student Services','Services'],['Finance','Finance'],['IT Service Desk','IT Desk'],['Cashier','Cashier'],['Careers Office','Careers'],['Security','Security']],
+  sport: [['Gym','Gym'],['Sports Hall','Hall'],['Fitness Studio','Fitness'],['Changing Rooms','Changing']]
+};
+function typeFor(b, f, i, n){
+  const last = 2*n - 1;
+  switch (b.kind) {
+    case 'teach': return i === n-1 ? ['wc'] : i === last ? ['study'] : i % 3 === 2 ? ['lab'] : ['class'];
+    case 'sci':   return i === n-1 ? ['wc'] : i % 3 === 0 ? ['class'] : ['lab','Science Lab','Lab'];
+    case 'arts':  return i === n-1 ? ['wc'] : i % 3 === 0 ? ['class'] : ['lab','Art Studio','Studio'];
+    case 'act':   return i === n-1 ? ['wc'] : (i === 0 && f === 0) ? ['facility','Student Lounge','Lounge'] : i % 2 ? ['study'] : ['class'];
+    case 'fac':   return i === last ? ['wc'] : i === n ? ['study','Meeting Room','Meet'] : ['office'];
+    case 'dine':  return f === 0 && i < 2 ? ['facility','Dining Hall','Dining'] : i === n-1 ? ['wc'] : ['class'];
+    case 'lib':   return f === 0 && i === 0 ? ['facility','Library Help Desk','Help'] : i === n-1 ? ['wc'] : ['study'];
+    case 'con':   return i === last ? ['wc'] : ['hall', 'Hall ' + 'ABCDEFG'[i], 'Hall ' + 'ABCDEFG'[i]];
+    case 'adm':   { if (i === n-1) return ['wc']; if (f === 0) { const x = FAC.adm[i % FAC.adm.length]; return ['facility', x[0], x[1]]; } return ['facility','Administration Offices','Admin']; }
+    case 'sport': { if (i === n-1) return ['wc']; const x = FAC.sport[i % FAC.sport.length]; return ['facility', x[0], x[1]]; }
   }
-  if (b.c === 'CC') return [['hall','Hall A','Hall A'],['hall','Hall B','Hall B'],['hall','Hall C','Hall C'],['facility','Main Foyer','Foyer'],['wc'],['hall','Auditorium','Auditor.']][i];
-  if (b.c === 'C6' && f === 0) return [['facility','Canteen','Canteen'],['facility','IT Help Desk','IT Desk'],['facility','Student Services','Services'],['study'],['wc'],['facility','Clinic','Clinic'],['facility','Prayer Room','Prayer'],['study'],['study'],['facility','Bookshop','Books']][i];
-  const topRow = ['class','class','lab','class','wc'], botRow = ['office','office','class','class', f === 0 ? 'facility' : 'study'];
-  const t = top ? topRow[i] : botRow[i - b.n];
-  if (t === 'facility') return ['facility','Prayer Room','Prayer'];
-  return [t];
+  return ['class'];
 }
+const ROOMS = [];
 B.forEach(b => {
-  const floors = b.floors || [0,1,2];
-  const mid = b.y + b.h/2, rw = (b.w - 12) / b.n;
-  floors.forEach(f => {
-    for (let i = 0; i < b.n * 2; i++) {
-      const top = i < b.n, col = top ? i : i - b.n;
-      const [t, name, short] = typeFor(b, f, i);
+  b.cx = b.x + b.w/2; b.cy = b.y + b.h/2;
+  if (!hasRooms(b)) return;
+  const R = b.inner || {x:b.x + 2, y:b.y + 2, w:b.w - 4, h:b.h - 4};
+  const horiz = R.w >= R.h, L = horiz ? R.w : R.h, S = horiz ? R.h : R.w;
+  const n = Math.max(2, Math.floor(L / 16)), cw = S * .22, depth = (S - cw) / 2, step = L / n;
+  b.corr = horiz ? {x:R.x, y:R.y + depth, w:R.w, h:cw} : {x:R.x + depth, y:R.y, w:cw, h:R.h};
+  floorsOf(b).forEach(f => {
+    for (let i = 0; i < 2*n; i++) {
+      const top = i < n, k = top ? i : i - n;
+      const [t, name, short] = typeFor(b, f, i, n);
       const id = `${b.c}-${f === 0 ? 'G' : f}${pad(i+1)}`;
-      const r = {id, b, f, t, name: name || TYPE[t], short, top,
-        x: b.x + 6 + col*rw + 1.5, w: rw - 3,
-        y: top ? b.y + 6 : mid + 12, h: top ? (b.h/2 - 18) : (b.h/2 - 18)};
+      const r = {id, b, f, t, name: name || TYPE[t], short};
+      if (horiz) { r.x = R.x + k*step + .6; r.w = step - 1.2; r.y = top ? R.y : R.y + depth + cw; r.h = depth; }
+      else { r.y = R.y + k*step + .6; r.h = step - 1.2; r.x = top ? R.x : R.x + depth + cw; r.w = depth; }
       r.cx = r.x + r.w/2; r.cy = r.y + r.h/2;
-      if (t === 'office') r.doc = id === 'C3-207' ? 'Dr. Mariam Al Hosani' : DOCS[Math.floor(hash(id)*DOCS.length)];
+      r.door = horiz ? {x:r.cx, y: top ? r.y + r.h : r.y} : {x: top ? r.x + r.w : r.x, y:r.cy};
+      if (t === 'office') r.doc = id === PING.room ? PING.doc : DOCS[Math.floor(hash(id)*DOCS.length)];
       ROOMS.push(r);
     }
   });
 });
 const byId = Object.fromEntries(ROOMS.map(r => [r.id, r]));
+const bByCode = Object.fromEntries(B.map(b => [b.c, b]));
 
-/* ---------- live status from the (sample) timetable ---------- */
+/* ---------- live status from a sample timetable ---------- */
 const P = {class:.55, lab:.5, study:.45, hall:.3};
 const busyAt = (r, s) => s >= 8 && s < 20 && hash(r.id + '@' + s) < P[r.t];
 function status(r, m){
@@ -316,7 +373,7 @@ function status(r, m){
     return {busy:false, label:'Free', line: e >= 20 ? 'Free for the rest of the day' : `Free until ${e}:00`, until:e};
   }
   if (r.t === 'office') {
-    const inNow = r.id === 'C3-207' || hash(r.id + '!' + s) < .6;
+    const inNow = r.id === PING.room || hash(r.id + '!' + s) < .6;
     return {busy:false, neutral:true, label: inNow ? 'Doctor in' : 'Away', line: inNow ? `${r.doc} · office hours now` : `${r.doc} · back at ${s+1}:00`};
   }
   return {busy:false, neutral:true, label:'Open', line: r.t === 'wc' ? 'Open all day' : 'Open 8:00 – 20:00'};
@@ -324,81 +381,123 @@ function status(r, m){
 const fillFor = (r, st) => r.t === 'office' || r.t === 'wc' ? 'var(--office)' : r.t === 'facility' ? 'var(--facility)' : st.busy ? 'var(--busy)' : 'var(--free)';
 
 /* ---------- state ---------- */
-const S = {m: 630, floor: 0, sel: null, view:{x:0,y:0,k:1}, kMin:.3, chip:'all', pings:[]};
+const S = {m: 630, floor: 0, sel: null, selB: null, view:{x:0,y:0,k:1}, kMin:.25, chip:'all', pings:[]};
+const ROOMS_K = 2.3, LABEL_K = 3.6;
 
-/* ---------- draw ---------- */
-const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) { const v = String(attrs[k]); if ((k === 'fill' || k === 'stroke') && v.startsWith('var(')) e.style[k] = v; else e.setAttribute(k, v); } if (parent) parent.appendChild(e); return e; };
+/* ---------- drawing ---------- */
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag);
+  for (const k in attrs) { const v = String(attrs[k]); if ((k === 'fill' || k === 'stroke') && v.startsWith('var(')) e.style[k] = v; else e.setAttribute(k, v); }
+  if (parent) parent.appendChild(e); return e; };
+const txt = (x, y, s, size, attrs, parent) => { const t = el('text', Object.assign({x, y, 'text-anchor':'middle', 'font-size':size}, attrs), parent); t.textContent = s; return t; };
+
 function drawBase(){
-  el('rect', {x:-400, y:-400, width:1800, height:1800, fill:'var(--ground)'}, world);
-  el('rect', {x:335, y:270, width:330, height:530, rx:24, fill:'var(--walk)', stroke:'var(--line)', 'stroke-width':1}, world);
-  el('rect', {x:485, y:0, width:30, height:110, fill:'var(--walk)'}, world);
-  el('text', {x:500, y:430, 'text-anchor':'middle', 'font-size':15, fill:'#7C8DA2', 'font-weight':600, 'letter-spacing':2}, world).textContent = 'CENTRAL COURTYARD';
-  el('text', {x:500, y:-14, 'text-anchor':'middle', 'font-size':13, fill:'#7C8DA2', 'font-weight':600}, world).textContent = 'MAIN GATE';
+  el('rect', {x:-600, y:-600, width:2500, height:2100, fill:'#D2DAE2'}, world);
+  // site + perimeter road
+  el('rect', {x:95, y:148, width:1128, height:540, rx:6, fill:'var(--ground)', stroke:'#8FA2B6', 'stroke-width':1.5}, world);
+  const road = {fill:'none', stroke:'#F3F6F9', 'stroke-width':9, 'stroke-linejoin':'round', 'stroke-linecap':'round'};
+  el('polyline', Object.assign({points:'230,165 1090,165 1210,300 1210,680 110,680 110,300 230,165'}, road), world);
+  el('polyline', Object.assign({points:'652,132 655,165 650,255'}, road), world);
+  el('polyline', Object.assign({points:'692,132 690,165 690,255'}, road), world);
+  [[315,132,300,165],[612,132,615,165],[735,132,730,165],[1050,132,1060,165],[215,692,215,680],[476,692,476,680],[862,692,862,680],[1128,692,1128,680]]
+    .forEach(([a,b,c,d]) => el('line', Object.assign({x1:a, y1:b, x2:c, y2:d}, road), world));
+  // campus labels
+  txt(230, 290, 'FEMALE CAMPUS', 15, {fill:'#7C8DA2', 'font-weight':700, 'letter-spacing':2, class:'blabel'}, world);
+  txt(1090, 290, 'MALE CAMPUS', 15, {fill:'#7C8DA2', 'font-weight':700, 'letter-spacing':2, class:'blabel'}, world);
+  txt(680, 645, 'CENTRAL CAMPUS', 13, {fill:'#7C8DA2', 'font-weight':700, 'letter-spacing':2, class:'blabel'}, world);
+  // promenades + plaza
+  const prom = {fill:'none', stroke:'#F6F0DD', 'stroke-width':13, 'stroke-linecap':'round', 'stroke-linejoin':'round'};
+  el('polyline', Object.assign({points: SPINE.F.slice(1).join(' ')}, prom), world);
+  el('polyline', Object.assign({points: SPINE.M.slice(1).join(' ')}, prom), world);
+  txt(470, 444, 'Female Promenade', 7, {fill:'#9A8A5C', 'font-weight':600, transform:'rotate(4 470 444)'}, world);
+  txt(890, 444, 'Male Promenade', 7, {fill:'#9A8A5C', 'font-weight':600, transform:'rotate(-4 890 444)'}, world);
+  el('ellipse', {cx:680, cy:418, rx:74, ry:50, fill:'var(--walk)', stroke:'#B7C3CF', 'stroke-width':1}, world);
+  el('circle', {cx:680, cy:412, r:16, fill:'none', stroke:'#C9B6B9', 'stroke-width':2}, world);
+  txt(680, 440, 'Central Plaza', 7, {fill:'#7C8DA2', 'font-weight':600}, world);
+  // parking
   PARK.forEach(p => {
-    const g = el('g', {'data-park':p.id, class:'room'}, world);
-    el('rect', {x:p.x, y:p.y, width:p.w, height:p.h, rx:6, fill:'#C9D3DD', stroke:'var(--line)', 'stroke-dasharray':'4 4'}, g);
-    el('text', {x:p.x + p.w/2, y:p.y + p.h/2 + 7, 'text-anchor':'middle', 'font-size':20, 'font-weight':700, fill:'#5B6E84', 'font-family':'Rubik, Arial'}, g).textContent = p.id;
+    const g = el('g', {'data-park':p.id, class:'hit'}, world);
+    el('rect', {x:p.x, y:p.y, width:p.w, height:p.h, rx:4, fill:'#C3CDD8', stroke:'#8FA2B6', 'stroke-dasharray':'3 3'}, g);
+    txt(p.x + p.w/2, p.y + p.h/2 + 5, p.id, 14, {'font-weight':700, fill:'#5B6E84', 'font-family':'Rubik, Arial'}, g);
   });
+  // gates
+  GATES.forEach(gt => {
+    const g = el('g', {'data-gate':gt.n, class:'hit'}, world);
+    const closed = gt.rule.startsWith('No');
+    el('circle', {cx:gt.x, cy:gt.y, r:9, fill: closed ? '#9AA8B6' : 'var(--navy)', stroke:'#fff', 'stroke-width':2}, g);
+    txt(gt.x, gt.y + 3.5, String(gt.n), 9, {fill:'#fff', 'font-weight':700}, g);
+  });
+  // buildings
   B.forEach(b => {
-    const g = el('g', {'data-b':b.c}, world);
-    el('rect', {x:b.x, y:b.y, width:b.w, height:b.h, rx:8, fill:'var(--bldg)', stroke:'#7F93A8', 'stroke-width':1.5, class:'room'}, g);
-    el('rect', {x:b.x + 6, y:b.y + b.h/2 - 10, width:b.w - 12, height:20, fill:'#E9EEF3'}, g);
-    const lb = el('g', {class:'blabel', 'pointer-events':'none'}, g);
-    el('text', {x:b.x + b.w/2, y:b.y + b.h/2 - 4, 'text-anchor':'middle', 'font-size':34, 'font-weight':700, fill:'var(--navy)', 'font-family':'Rubik, Arial'}, lb).textContent = b.c;
-    el('text', {x:b.x + b.w/2, y:b.y + b.h/2 + 24, 'text-anchor':'middle', 'font-size':16, 'font-weight':600, fill:'var(--navy)'}, lb).textContent = b.short;
+    const g = el('g', {'data-b':b.c, class:'hit'}, world);
+    const nr = !hasRooms(b);
+    el('rect', {x:b.x, y:b.y, width:b.w, height:b.h, rx:b.rx || 3, fill: nr ? '#B9C5D1' : 'var(--bldg)', stroke:'#6F849B', 'stroke-width':1.2, class:'bshape'}, g);
+    if (b.corr) el('rect', {x:b.corr.x, y:b.corr.y, width:b.corr.w, height:b.corr.h, fill:'#E9EEF3', class:'corr'}, g);
+    const size = Math.max(7, Math.min(15, b.w / (b.c.length * .62 + .6), b.h * .42));
+    txt(b.cx, b.cy + size*.36, b.c, size, {'font-weight':700, fill:'var(--navy)', 'font-family':'Rubik, Arial', class: hasRooms(b) ? 'blabel' : '', 'pointer-events':'none'}, g);
+    if (hasRooms(b)) txt(b.cx, b.y - 2.5, b.c, 4.5, {'font-weight':700, fill:'var(--navy)', class:'btag', 'pointer-events':'none'}, g);
   });
   el('g', {id:'roomsLayer', class:'rooms'}, world);
   el('g', {id:'routeLayer'}, world);
   const you = el('g', {id:'you', 'pointer-events':'none'}, world);
-  el('circle', {cx:YOU.x, cy:YOU.y, r:14, fill:'var(--gold)', class:'you-pulse'}, you);
-  el('circle', {cx:YOU.x, cy:YOU.y, r:8, fill:'var(--gold)', stroke:'#fff', 'stroke-width':3}, you);
-  el('text', {x:YOU.x, y:YOU.y + 26, 'text-anchor':'middle', 'font-size':11, 'font-weight':700, fill:'var(--navy)'}, you).textContent = 'You';
+  el('circle', {cx:YOU.x, cy:YOU.y, r:7, fill:'var(--gold)', class:'you-pulse'}, you);
+  el('circle', {cx:YOU.x, cy:YOU.y, r:4, fill:'var(--gold)', stroke:'#fff', 'stroke-width':1.6}, you);
+  txt(YOU.x, YOU.y + 11, 'You', 5.5, {'font-weight':700, fill:'var(--navy)'}, you);
 }
 function drawRooms(){
   const L = $('#roomsLayer'); L.replaceChildren();
   B.forEach(b => {
-    if (b.floors && !b.floors.includes(S.floor)) {
-      el('rect', {x:b.x+6, y:b.y+6, width:b.w-12, height:b.h-12, fill:'#D3DBE3', rx:4}, L);
-      el('text', {x:b.x + b.w/2, y:b.y + b.h/2 + 5, 'text-anchor':'middle', 'font-size':12, fill:'var(--muted)'}, L).textContent = `${b.c}: ground floor only`;
+    if (hasRooms(b) && !floorsOf(b).includes(S.floor)) {
+      const R = b.inner || b;
+      el('rect', {x:R.x + 2, y:R.y + 2, width:R.w - 4, height:R.h - 4, fill:'#CBD4DD', rx:2}, L);
+      txt(b.cx, b.cy + 1.5, `No floor ${S.floor}`, 4.2, {fill:'var(--muted)'}, L);
     }
   });
   ROOMS.filter(r => r.f === S.floor).forEach(r => {
-    const st = status(r, S.m);
-    const g = el('g', {'data-room':r.id, class:'room' + (S.sel === r ? ' sel' : '')}, L);
-    el('rect', {x:r.x, y:r.y, width:r.w, height:r.h, rx:3, fill:fillFor(r, st), stroke: S.sel === r ? 'var(--gold)' : '#8FA2B6', 'stroke-width': S.sel === r ? 3 : .8}, g);
-    const dark = st.busy && !(r.t === 'office' || r.t === 'wc' || r.t === 'facility');
-    const t = el('text', {x:r.cx, y:r.cy + 2.5, 'text-anchor':'middle', 'font-size':r.short ? 6.4 : 7.5, 'font-weight':600, fill: dark ? '#FFFFFF' : 'var(--navy)', class:'rlabel'}, g);
-    t.textContent = r.short || (r.t === 'wc' ? 'WC' : r.id.split('-')[1]);
+    const st = status(r, S.m), sel = S.sel === r;
+    const g = el('g', {'data-room':r.id, class:'hit'}, L);
+    el('rect', {x:r.x, y:r.y, width:r.w, height:r.h, rx:1.2, fill:fillFor(r, st), stroke: sel ? 'var(--gold)' : '#8FA2B6', 'stroke-width': sel ? 1.6 : .35}, g);
+    const busyTxt = st.busy && P[r.t] !== undefined;
+    const lab = r.short || (r.t === 'wc' ? 'WC' : r.id.split('-')[1]);
+    const fs = Math.min(4.2, r.w / (lab.length * .6 + .4), r.h * .45);
+    txt(r.cx, r.cy + fs*.35, lab, fs, {'font-weight':600, fill: busyTxt ? '#FFFFFF' : 'var(--navy)', class:'rlabel'}, g);
   });
   document.querySelectorAll('.floors button').forEach(btn => btn.setAttribute('aria-pressed', String(+btn.dataset.f === S.floor)));
+  document.querySelectorAll('[data-b] .bshape').forEach(s => { const on = S.selB && s.parentNode.dataset.b === S.selB.c; s.style.stroke = on ? 'var(--gold)' : '#6F849B'; s.setAttribute('stroke-width', on ? 2.5 : 1.2); });
 }
 
-/* ---------- view / gestures ---------- */
+/* ---------- view and gestures ---------- */
 function size(){ const r = svg.getBoundingClientRect(); return {w:r.width, h:r.height, left:r.left, top:r.top}; }
 function apply(){
   const v = S.view;
   world.setAttribute('transform', `translate(${v.x} ${v.y}) scale(${v.k})`);
-  svg.classList.toggle('zoomed', v.k >= 1.05);
-  svg.classList.toggle('labels', v.k >= 1.7);
-  $('#hint').style.opacity = v.k >= 1.05 ? 0 : 1;
+  svg.classList.toggle('zoomed', v.k >= ROOMS_K);
+  svg.classList.toggle('labels', v.k >= LABEL_K);
+  $('#hint').style.opacity = v.k >= ROOMS_K || sheet.classList.contains('open') ? 0 : 1;
 }
-const clampK = k => Math.min(6, Math.max(S.kMin, k));
+const clampK = k => Math.min(14, Math.max(S.kMin, k));
 function zoomAt(px, py, f){
   const v = S.view, nk = clampK(v.k * f), wx = (px - v.x)/v.k, wy = (py - v.y)/v.k;
   v.k = nk; v.x = px - wx*nk; v.y = py - wy*nk; apply();
 }
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let anim = 0;
 function flyTo(wx, wy, k, yFrac = .34){
-  const {w, h} = size(), v = S.view, from = {...v}, to = {k, x: w/2 - wx*k, y: h*yFrac - wy*k};
+  const {w, h} = size(), v = S.view, from = {...v}, to = {k: clampK(k), x: 0, y: 0};
+  to.x = w/2 - wx*to.k; to.y = h*yFrac - wy*to.k;
+  const id = ++anim;
   if (reduce) { Object.assign(v, to); apply(); return; }
-  const t0 = performance.now(), D = 520;
-  const step = now => { const p = Math.min(1, (now - t0)/D), e = 1 - Math.pow(1-p, 3);
-    v.k = from.k + (to.k - from.k)*e; v.x = from.x + (to.x - from.x)*e; v.y = from.y + (to.y - from.y)*e; apply();
+  const t0 = performance.now(), D = 560;
+  const step = now => { if (id !== anim) return; const p = Math.min(1, (now - t0)/D), e = 1 - Math.pow(1-p, 3);
+    const k2 = from.k * Math.pow(to.k/from.k, e);
+    const cx = (w/2 - from.x)/from.k + ((w/2 - to.x)/to.k - (w/2 - from.x)/from.k)*e;
+    const cy = (h*yFrac - from.y)/from.k + ((h*yFrac - to.y)/to.k - (h*yFrac - from.y)/from.k)*e;
+    v.k = k2; v.x = w/2 - cx*k2; v.y = h*yFrac - cy*k2; apply();
     if (p < 1) requestAnimationFrame(step); };
   requestAnimationFrame(step);
 }
 const pts = new Map(); let start = null, moved = false, pinch = null;
 svg.addEventListener('pointerdown', e => {
+  anim++;
   svg.setPointerCapture(e.pointerId); pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if (pts.size === 1) { start = {x:e.clientX, y:e.clientY}; moved = false; }
   if (pts.size === 2) { const [a, b] = [...pts.values()], s = size(), mx = (a.x+b.x)/2 - s.left, my = (a.y+b.y)/2 - s.top;
@@ -419,112 +518,180 @@ svg.addEventListener('pointermove', e => {
 const up = e => {
   if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId);
   if (pts.size < 2) pinch = null;
-  if (pts.size === 1) { start = {...[...pts.values()][0]}; }
+  if (pts.size === 1) start = {...[...pts.values()][0]};
   if (pts.size === 0 && !moved && e.type === 'pointerup') tap(document.elementFromPoint(e.clientX, e.clientY));
 };
 svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
-svg.addEventListener('wheel', e => { e.preventDefault(); const s = size(); zoomAt(e.clientX - s.left, e.clientY - s.top, Math.exp(-e.deltaY * .0015)); }, {passive:false});
-$('#zin').onclick = () => { const s = size(); zoomAt(s.w/2, s.h/2, 1.5); };
-$('#zout').onclick = () => { const s = size(); zoomAt(s.w/2, s.h/2, 1/1.5); };
-$('#me').onclick = () => flyTo(YOU.x, YOU.y, Math.max(S.view.k, 1.4), .5);
+svg.addEventListener('wheel', e => { e.preventDefault(); anim++; const s = size(); zoomAt(e.clientX - s.left, e.clientY - s.top, Math.exp(-e.deltaY * .0018)); }, {passive:false});
+$('#zin').onclick = () => { anim++; const s = size(); zoomAt(s.w/2, s.h/2, 1.6); };
+$('#zout').onclick = () => { anim++; const s = size(); zoomAt(s.w/2, s.h/2, 1/1.6); };
+$('#me').onclick = () => flyTo(YOU.x, YOU.y, Math.max(S.view.k, 2.6), .45);
 
 function tap(t){
-  if (!t) return;
-  const room = t.closest && t.closest('[data-room]');
-  if (room) return selectRoom(byId[room.dataset.room]);
-  const park = t.closest && t.closest('[data-park]');
-  if (park) return showParking(park.dataset.park);
-  const b = t.closest && t.closest('[data-b]');
-  if (b) { const bb = B.find(x => x.c === b.dataset.b); if (bb.floors && !bb.floors.includes(S.floor)) setFloor(0); flyTo(bb.x + bb.w/2, bb.y + bb.h/2, 2.2); showBuilding(bb); return; }
+  if (!t || !t.closest) return;
+  const room = t.closest('[data-room]');
+  if (room && svg.classList.contains('zoomed')) return selectRoom(byId[room.dataset.room]);
+  const park = t.closest('[data-park]'); if (park) return showParking(PARK.find(p => p.id === park.dataset.park));
+  const gate = t.closest('[data-gate]'); if (gate) return showGate(GATES.find(g => g.n === +gate.dataset.gate));
+  const b = t.closest('[data-b]');
+  if (b) { const bb = bByCode[b.dataset.b]; return selectBuilding(bb, !svg.classList.contains('zoomed')); }
   closeSheet();
 }
 
 /* ---------- sheet ---------- */
 const sheet = $('#sheet');
-function openSheet(html){ if (!html.includes('Route to')) sheet.classList.remove('compact'); sheet.innerHTML = '<div class="grab"></div>' + html; sheet.classList.add('open'); const x = sheet.querySelector('.x'); if (x) x.onclick = closeSheet; }
-function closeSheet(){ sheet.classList.remove('open'); if (S.sel) { S.sel = null; drawRooms(); } $('#routeLayer').replaceChildren(); }
+function openSheet(html, compact){ sheet.classList.toggle('compact', !!compact); sheet.innerHTML = '<div class="grab"></div>' + html; sheet.classList.add('open'); apply(); const x = sheet.querySelector('.x'); if (x) x.onclick = closeSheet; }
+function closeSheet(){ sheet.classList.remove('open'); apply(); S.sel = null; S.selB = null; drawRooms(); $('#routeLayer').replaceChildren(); }
+const head = (eyebrow, title, small) => `<div class="sh-head"><div><p class="eyebrow">${eyebrow}</p><h2>${title}${small ? `<small>${small}</small>` : ''}</h2></div><button class="x" aria-label="Close">✕</button></div>`;
 function pillHTML(st){ const cls = st.busy ? 'busy' : st.neutral ? 'neutral' : 'free';
   const c = st.busy ? 'var(--busy)' : st.neutral ? 'var(--navy3)' : '#fff; border:1px solid var(--line)';
   return `<span class="pill ${cls}"><i style="background:${c}"></i>${st.label}</span>`; }
 function roomSheet(r){
   const st = status(r, S.m);
-  openSheet(`<div class="sh-head"><div><p class="eyebrow">${r.b.c} · ${r.b.short} · ${floorName(r.f)}</p>
-    <h2>${r.t === 'office' ? r.doc : r.id}<small>${r.t === 'office' ? 'Office ' + r.id : r.name}</small></h2></div><button class="x" aria-label="Close">✕</button></div>
+  openSheet(`${head(`${CAMPUS[r.b.campus]} · ${r.b.c} · ${floorName(r.f)}`, r.t === 'office' ? r.doc : r.id, r.t === 'office' ? 'Office ' + r.id : r.name)}
     ${pillHTML(st)}<p class="detail">${st.line}</p>
     <div class="actions"><button class="btn primary" id="go">Take me there</button>${r.t === 'office' ? '<button class="btn ghost" id="copy">Copy room</button>' : ''}</div>`);
   $('#go').onclick = () => route(r);
   const c = $('#copy'); if (c) c.onclick = () => { navigator.clipboard?.writeText(`${r.doc}'s office: ${r.id}, ${r.b.name}, ${floorName(r.f)}`).then(() => c.textContent = 'Copied', () => c.textContent = r.id); };
 }
 function selectRoom(r){
-  S.sel = r; if (S.floor !== r.f) S.floor = r.f; drawRooms();
+  S.sel = r; S.selB = null; S.floor = r.f; drawRooms();
   $('#routeLayer').replaceChildren(); switchTab('map');
-  flyTo(r.cx, r.cy, Math.max(S.view.k, 2.6)); roomSheet(r);
+  flyTo(r.cx, r.cy, Math.max(S.view.k, 6)); roomSheet(r);
 }
-function showBuilding(b){
+function selectBuilding(b, fly){
+  S.sel = null; S.selB = b; $('#routeLayer').replaceChildren();
+  if (hasRooms(b) && !floorsOf(b).includes(S.floor)) S.floor = 0;
+  drawRooms(); switchTab('map');
+  if (fly) flyTo(b.cx, b.cy, Math.max(4.5, Math.min(7, 150 / Math.max(b.w, b.h) * 2)));
+  if (!hasRooms(b)) {
+    openSheet(`${head(CAMPUS[b.campus] + ' · ' + b.c, b.name)}
+      <p class="detail">${b.kind === 'res' ? 'Student residence. Access for residents only.' : b.kind === 'ecc' ? 'Childcare for children of ZU students and staff.' : 'Campus operations building. Not open to students.'}</p>
+      <div class="actions"><button class="btn primary" id="go">Take me there</button></div>`);
+    $('#go').onclick = () => route(null, b); return;
+  }
   const rs = ROOMS.filter(r => r.b === b && r.f === S.floor), st = rs.map(r => status(r, S.m));
   const free = rs.filter((r,i) => P[r.t] !== undefined && !st[i].busy).length, busy = st.filter(s => s.busy).length;
-  openSheet(`<div class="sh-head"><div><p class="eyebrow">${b.c} · ${floorName(S.floor)}</p><h2>${b.name}</h2></div><button class="x" aria-label="Close">✕</button></div>
-    <p class="detail"><b>${free}</b> free rooms <span>·</span> <b>${busy}</b> in use on this floor right now.</p>
-    <p class="detail"><span>Tap a room for details, or switch floors on the left.</span></p>`);
+  openSheet(`${head(`${CAMPUS[b.campus]} · ${b.c} · ${floorName(S.floor)}`, b.name)}
+    <p class="detail"><b>${free}</b> free <span>·</span> <b>${busy}</b> in use on this floor right now. <span>Tap a room for details, or switch floors on the left.</span></p>
+    <div class="actions"><button class="btn primary" id="go">Take me there</button></div>`);
+  $('#go').onclick = () => route(null, b);
 }
-function showParking(id){
-  openSheet(`<div class="sh-head"><div><p class="eyebrow">Parking</p><h2>Car park ${id}</h2></div><button class="x" aria-label="Close">✕</button></div>
+function showParking(p){
+  openSheet(`${head('Parking · near Gate ' + p.g, 'Car park ' + p.id)}
     <span class="pill neutral"><i style="background:var(--gold)"></i>Coming in Phase 2</span>
-    <p class="detail">Live green / red parking status, so you know a lot is full before you reach the gate.</p>`);
+    <p class="detail">Live green and red availability, so you know this car park is full before you reach Gate ${p.g}.</p>`);
+}
+function showGate(g){
+  const closed = g.rule.startsWith('No');
+  openSheet(`${head('Campus gate', 'Gate ' + g.n)}
+    <span class="pill ${closed ? 'busy' : 'free'}"><i style="background:${closed ? 'var(--busy)' : '#fff; border:1px solid var(--line)'}"></i>${g.rule}</span>
+    <p class="detail">${closed ? 'Vehicles cannot enter here. ' : ''}Vehicle entry is through Gates 3, 7, 8 and 9. Exit through Gates 4, 7, 8 and 10.</p>`);
 }
 
-/* ---------- routing ---------- */
-function route(r){
-  const b = r.b, mid = b.y + b.h/2, pts2 = [[YOU.x, YOU.y]];
-  const edge = r.top ? r.y + r.h : r.y;
-  if (b.side === 'w') { pts2.push([340, YOU.y],[340, mid],[b.x + b.w, mid],[r.cx, mid],[r.cx, edge]); }
-  else if (b.side === 'e') { pts2.push([660, YOU.y],[660, mid],[b.x, mid],[r.cx, mid],[r.cx, edge]); }
-  else if (b.side === 'n') { pts2.push([500, b.y + b.h + 10],[500, b.y + b.h],[500, mid],[r.cx, mid],[r.cx, edge]); }
-  else { pts2.push([500, b.y - 10],[500, b.y],[500, mid],[r.cx, mid],[r.cx, edge]); }
+/* ---------- routing along the plaza and promenades ---------- */
+function spineTo(campus, x){
+  const sp = SPINE[campus], out = [sp[0]];
+  const dir = campus === 'F' ? -1 : 1;
+  for (let i = 1; i < sp.length; i++) {
+    const [ax, ay] = sp[i-1], [bx, by] = sp[i];
+    if ((x - bx) * dir >= 0) { out.push(sp[i]); continue; }
+    const t = (x - ax) / (bx - ax); out.push([x, ay + (by - ay)*t]); return out;
+  }
+  return out;
+}
+function route(r, bOnly){
+  const b = r ? r.b : bOnly;
+  let path;
+  if (b.kind === 'fac') {
+    const F = b.campus === 'F';
+    if (b.y > 480) { const lane = F ? 664 : 696, low = 494; const ex = F ? b.x + b.w : b.x;
+      path = [[YOU.x, YOU.y], [lane, 450], [lane, low], [ex + (F ? 4 : -4), low], [ex + (F ? 4 : -4), b.cy], [ex, b.cy]]; }
+    else { const ex = F ? b.x + b.w : b.x, lane = F ? ex + 14 : ex - 10;
+      path = [[YOU.x, YOU.y], [lane, YOU.y], [lane, b.cy], [ex, b.cy]]; }
+  } else if (b.campus === 'C' || b.c === 'FIS' || b.c === 'MIS') {
+    const doorY = b.cy < YOU.y ? b.y + b.h : b.y;
+    path = [[YOU.x, YOU.y], [b.cx, YOU.y + (doorY - YOU.y)*.5], [b.cx, doorY]];
+    if (b.c === 'CON') path = [[YOU.x, YOU.y], [597, 400], [597, 300], [b.x + 4, 300]];
+  } else {
+    const sx = b.campus === 'F' ? Math.min(Math.max(b.cx, 396), 592) : Math.min(Math.max(b.cx, 768), 952);
+    const sp = spineTo(b.campus, sx);
+    const [lx, ly] = sp[sp.length - 1];
+    const doorY = b.cy < ly ? b.y + b.h : b.y;
+    const clear = x => !B.some(o => o !== b && x > o.x - 1.5 && x < o.x + o.w + 1.5 && Math.max(o.y, Math.min(ly, doorY)) < Math.min(o.y + o.h, Math.max(ly, doorY)));
+    let doorX = Math.min(Math.max(lx, b.x + 3), b.x + b.w - 3);
+    if (!clear(doorX)) { const c = []; for (let x = b.x + 3; x <= b.x + b.w - 3; x += 1.5) if (clear(x)) c.push(x);
+      if (c.length) doorX = c.sort((a, z) => Math.abs(a - lx) - Math.abs(z - lx))[0]; }
+    const sp2 = spineTo(b.campus, b.campus === 'F' ? Math.min(Math.max(doorX, 433), 632) : Math.min(Math.max(doorX, 728), 946));
+    const ly2 = sp2[sp2.length - 1][1];
+    path = sp2.concat([[doorX, ly2], [doorX, doorY]]);
+  }
+  const entry = path[path.length - 1];
+  if (r) { const c = b.corr; const cy = c.y + c.h/2, cx = c.x + c.w/2; const horiz = c.w >= c.h;
+    path.push(horiz ? [entry[0], cy] : [cx, entry[1]], horiz ? [r.door.x, cy] : [cx, r.door.y], [r.door.x, r.door.y]); }
   const L = $('#routeLayer'); L.replaceChildren();
-  el('polyline', {points: pts2.map(p => p.join(',')).join(' '), class:'route'}, L);
-  el('circle', {cx:r.cx, cy:edge, r:5, fill:'var(--navy)', stroke:'#fff', 'stroke-width':2}, L);
-  let d = 0; for (let i = 1; i < pts2.length; i++) d += Math.hypot(pts2[i][0]-pts2[i-1][0], pts2[i][1]-pts2[i-1][1]);
-  const meters = Math.round(d * .55 / 5) * 5 + r.f * 12, mins = Math.max(1, Math.round(meters / 75 + r.f * .5));
-  const dir = {w:'west', e:'east', n:'north', s:'south'}[b.side];
-  const sideTxt = b.side === 'w' ? (r.top ? 'right' : 'left') : b.side === 'e' ? (r.top ? 'left' : 'right') : (r.top ? 'left' : 'right');
-  const steps = [`Walk ${dir} across the Central Courtyard to ${b.c}`, `Enter ${b.name} by the courtyard door`];
-  if (r.f > 0) steps.push(`Take the stairs or lift to ${floorName(r.f)}`);
-  steps.push(`Follow the corridor. ${r.id} is on your ${sideTxt}`);
-  const xs = pts2.map(p => p[0]), ys = pts2.map(p => p[1]), bw = Math.max(...xs) - Math.min(...xs) + 60, bh = Math.max(...ys) - Math.min(...ys) + 60;
-  const sz = size(), fit = Math.min(sz.w / bw, (sz.h * .48) / bh);
-  flyTo((Math.max(...xs) + Math.min(...xs))/2, (Math.max(...ys) + Math.min(...ys))/2, Math.min(2.2, Math.max(1.06, fit)), .26);
-  sheet.classList.add('compact'); openSheet(`<div class="sh-head"><div><p class="eyebrow">Route to ${r.id}</p><h2>${r.t === 'office' ? r.doc + '’s office' : r.name}</h2></div><button class="x" aria-label="Close">✕</button></div>
+  el('polyline', {points: path.map(p => p.map(n => n.toFixed(1)).join(',')).join(' '), class:'route'}, L);
+  const end = path[path.length - 1];
+  const pin = el('g', {'pointer-events':'none'}, L);
+  el('path', {d:`M${end[0]} ${end[1]} l-5 -9 a6 6 0 1 1 10 0 z`, fill:'var(--busy)', stroke:'#fff', 'stroke-width':1}, pin);
+  el('circle', {cx:end[0], cy:end[1] - 12.5, r:2.2, fill:'#fff'}, pin);
+  let d = 0; for (let i = 1; i < path.length; i++) d += Math.hypot(path[i][0]-path[i-1][0], path[i][1]-path[i-1][1]);
+  const fl = r ? r.f : 0, meters = Math.round(d * 1.05 / 5) * 5 + fl * 10, mins = Math.max(1, Math.round(meters / 80 + fl * .5));
+  const steps = [];
+  if (b.campus === 'F' && b.c !== 'FIS') steps.push('From the Central Plaza, walk west along the Female Promenade');
+  else if (b.campus === 'M' && b.c !== 'MIS') steps.push('From the Central Plaza, walk east along the Male Promenade');
+  else steps.push(`Cross the Central Plaza to the ${b.name}`);
+  steps.push(`Enter ${b.c} · ${b.name}`);
+  if (fl > 0) steps.push(`Take the stairs or lift to ${floorName(fl)}`);
+  if (r) steps.push(`Follow the main corridor to ${r.id}`);
+  if (b.campus !== 'C' && b.kind !== 'fac' && b.kind !== 'dine') steps.splice(1, 0, `Turn off the promenade toward ${b.c}`);
+  if (b.kind === 'fac') steps[0] = `From the Central Plaza, head ${b.campus === 'F' ? 'west' : 'east'} to the faculty buildings`;
+  if (r) { S.sel = r; S.floor = r.f; } S.selB = r ? null : b; drawRooms();
+  const xs = path.map(p => p[0]), ys = path.map(p => p[1]).concat([end[1] - 18]);
+  const bw = Math.max(...xs) - Math.min(...xs) + 40, bh = Math.max(...ys) - Math.min(...ys) + 40;
+  const sz = size(), fit = Math.min(sz.w / bw, (sz.h * .46) / bh);
+  flyTo((Math.max(...xs) + Math.min(...xs))/2, (Math.max(...ys) + Math.min(...ys))/2, Math.min(7, fit >= 1.9 ? Math.max(fit, ROOMS_K + .1) : fit), .27);
+  const title = r ? (r.t === 'office' ? r.doc + '’s office' : r.name) : b.name;
+  openSheet(`${head('Route to ' + (r ? r.id : b.c), title)}
     <div class="trip"><div><b>${mins} min</b> <span>walk</span></div><div><b>${meters} m</b></div></div>
     <ol class="steps">${steps.map(s => `<li>${s}</li>`).join('')}</ol>
-    <div class="actions"><button class="btn ghost" id="endRoute">End route</button><button class="btn primary" id="zoomDoor">Zoom to door</button></div>`);
+    <div class="actions"><button class="btn ghost" id="endRoute">End route</button>${r ? '<button class="btn primary" id="zoomDoor">Zoom to room</button>' : ''}</div>`, true);
   $('#endRoute').onclick = closeSheet;
-  $('#zoomDoor').onclick = () => flyTo(r.cx, r.cy, 3);
+  const zd = $('#zoomDoor'); if (zd) zd.onclick = () => flyTo(r.cx, r.cy, 7);
 }
 
 /* ---------- search ---------- */
 const q = $('#q'), res = $('#results');
-const searchText = r => `${r.id} ${r.name} ${TYPE[r.t]} ${r.b.name} ${r.b.short} ${r.b.c} ${r.doc || ''} ${ALIAS[r.t] || ''} ${r.short || ''}`.toLowerCase();
-const INDEX = ROOMS.map(r => [r, searchText(r)]);
+const ITEMS = [
+  ...B.map(b => ({key:'b:' + b.c, title:`${b.c} · ${b.name}`, sub: CAMPUS[b.campus], dot:'var(--bldg)', text:`${b.c} ${b.name} ${CAMPUS[b.campus]} building ${b.kind === 'sport' ? 'gym sports' : ''} ${b.kind === 'dine' ? 'food dining canteen cafeteria' : ''}`.toLowerCase(), go: () => selectBuilding(b, true), rank:0})),
+  ...GATES.map(g => ({key:'g' + g.n, title:'Gate ' + g.n, sub: g.rule, dot:'var(--navy)', text:`gate ${g.n} gate${g.n} entrance exit`, go: () => { flyTo(g.x, g.y, 3); showGate(g); }, rank:1})),
+  ...PARK.map(p => ({key:p.id, title:'Car park ' + p.id, sub:'Near Gate ' + p.g, dot:'#C3CDD8', text:`${p.id} parking car park gate ${p.g}`.toLowerCase(), go: () => { flyTo(p.x + p.w/2, p.y + p.h/2, 3); showParking(p); }, rank:2})),
+  ...ROOMS.map(r => ({key:r.id, room:r, text:`${r.id} ${r.name} ${TYPE[r.t]} ${r.b.name} ${r.b.c} ${r.doc || ''} ${ALIAS[r.t] || ''} ${r.short || ''}`.toLowerCase(), go: () => selectRoom(r), rank:3}))
+];
 q.addEventListener('input', () => {
   const v = q.value.trim().toLowerCase();
   if (!v) { res.hidden = true; return; }
   const terms = v.split(/\s+/);
-  let hits = INDEX.filter(([, s]) => terms.every(t => s.includes(t))).map(([r]) => r);
-  hits.sort((a, b) => (a.f === S.floor ? 0 : 1) - (b.f === S.floor ? 0 : 1) || Math.hypot(a.cx-YOU.x, a.cy-YOU.y) - Math.hypot(b.cx-YOU.x, b.cy-YOU.y));
-  hits = hits.slice(0, 8);
-  res.innerHTML = hits.length ? hits.map(r => { const st = status(r, S.m);
-    return `<button class="res" data-id="${r.id}"><i class="dot" style="background:${fillFor(r, st)}"></i><span><b>${r.t === 'office' ? r.doc : r.name === TYPE[r.t] ? r.id : r.name}</b>
-      <small>${r.t === 'office' || r.name === TYPE[r.t] ? TYPE[r.t] + ' · ' : r.id + ' · '}${r.b.short} · ${floorName(r.f)} · ${st.label}</small></span></button>`; }).join('')
-    : `<p class="res" style="margin:0;color:var(--muted)">Nothing matches “${v.replace(/[<>&]/g,'')}”. Try a room number like C3-207.</p>`;
+  let hits = ITEMS.filter(it => terms.every(t => it.text.includes(t)));
+  const exact = hits.filter(it => it.key.toLowerCase() === v || it.key.toLowerCase() === 'b:' + v);
+  hits.sort((a, b) => a.rank - b.rank || (a.room && b.room ? (a.room.f - b.room.f) : 0));
+  hits = [...exact, ...hits.filter(h => !exact.includes(h))].slice(0, 8);
+  res.innerHTML = hits.length ? hits.map(it => {
+    if (it.room) { const r = it.room, st = status(r, S.m);
+      return `<button class="res" data-key="${it.key}"><i class="dot" style="background:${fillFor(r, st)}"></i><span><b>${r.t === 'office' ? r.doc : r.name === TYPE[r.t] ? r.id : r.name}</b>
+        <small>${r.t === 'office' || r.name === TYPE[r.t] ? TYPE[r.t] + ' · ' : r.id + ' · '}${r.b.c} · ${floorName(r.f)} · ${st.label}</small></span></button>`; }
+    return `<button class="res" data-key="${it.key}"><i class="dot" style="background:${it.dot}"></i><span><b>${it.title}</b><small>${it.sub}</small></span></button>`; }).join('')
+    : `<p class="res" style="margin:0;color:var(--muted)">Nothing matches “${v.replace(/[<>&]/g,'')}”. Try F2, Library or Gate 9.</p>`;
   res.hidden = false;
 });
-res.addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (!b) return; res.hidden = true; q.value = ''; q.blur(); selectRoom(byId[b.dataset.id]); });
+res.addEventListener('click', e => { const b = e.target.closest('[data-key]'); if (!b) return; res.hidden = true; q.value = ''; q.blur(); ITEMS.find(it => it.key === b.dataset.key).go(); });
 document.addEventListener('pointerdown', e => { if (!e.target.closest('.search')) res.hidden = true; });
 
-/* ---------- floors / time ---------- */
-function setFloor(f){ S.floor = f; drawRooms(); }
-document.querySelectorAll('.floors button').forEach(b => b.onclick = () => { setFloor(+b.dataset.f); if (S.view.k < 1.05) { const s = size(); zoomAt(s.w/2, s.h/2, 1.4 / S.view.k); } });
+/* ---------- floors and time ---------- */
+document.querySelectorAll('.floors button').forEach(b => b.onclick = () => {
+  S.floor = +b.dataset.f; drawRooms();
+  if (S.view.k < ROOMS_K) { const s = size(); zoomAt(s.w/2, s.h/2, (ROOMS_K * 1.3) / S.view.k); }
+});
 const clockBtn = $('#clockBtn'), pop = $('#timePop');
 clockBtn.onclick = () => { pop.hidden = !pop.hidden; clockBtn.setAttribute('aria-expanded', String(!pop.hidden)); };
 $('#time').addEventListener('input', e => {
@@ -534,14 +701,14 @@ $('#time').addEventListener('input', e => {
 
 /* ---------- free rooms ---------- */
 function renderFree(){
-  const list = ROOMS.filter(r => (r.t === 'class' || r.t === 'study' || r.t === 'lab') && (S.chip === 'all' || r.t === S.chip))
+  const pool = ROOMS.filter(r => r.t === 'class' || r.t === 'study' || r.t === 'lab');
+  const list = pool.filter(r => S.chip === 'all' || r.t === S.chip)
     .map(r => [r, status(r, S.m)]).filter(([, st]) => !st.busy)
     .sort((a, b) => b[1].until - a[1].until || Math.hypot(a[0].cx-YOU.x, a[0].cy-YOU.y) - Math.hypot(b[0].cx-YOU.x, b[0].cy-YOU.y));
-  const all = ROOMS.filter(r => r.t === 'class' || r.t === 'study' || r.t === 'lab').filter(r => !status(r, S.m).busy).length;
-  $('#freeBadge').textContent = all;
+  $('#freeBadge').textContent = pool.filter(r => !status(r, S.m).busy).length;
   $('#freeSub').textContent = `${list.length} rooms free at ${hm(S.m)} · longest free first`;
   $('#freeList').innerHTML = list.slice(0, 40).map(([r, st]) => `<button class="row" data-id="${r.id}"><i class="dot" style="background:var(--free)"></i>
-    <span class="meta"><b>${r.id}</b><small>${TYPE[r.t]} · ${r.b.short} · ${floorName(r.f)}</small></span>
+    <span class="meta"><b>${r.id}</b><small>${r.name} · ${r.b.c} · ${floorName(r.f)}</small></span>
     <span class="until">${st.until >= 20 ? 'All day' : 'Until ' + st.until + ':00'}</span></button>`).join('');
 }
 $('#freeList').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (b) selectRoom(byId[b.dataset.id]); });
@@ -558,22 +725,23 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => switchTab
 
 /* ---------- doctor ping ---------- */
 const toast = $('#toast'); let toastTimer;
+const goPing = () => { const r = byId[PING.room]; switchTab('map'); route(r); };
 $('#simPing').onclick = () => {
   switchTab('map'); closeSheet();
   setTimeout(() => { toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 8000); }, 500);
   S.pings.unshift(hm(S.m)); $('#alertBadge').hidden = false; $('#alertBadge').textContent = S.pings.length;
-  $('#pingList').innerHTML = S.pings.map(t => `<button class="row" data-id="C3-207"><span class="meta"><b>Dr. Mariam Al Hosani</b><small>“Please come to my office.” · C3-207</small></span><span class="until">${t}</span></button>`).join('');
+  $('#pingList').innerHTML = S.pings.map(t => `<button class="row" data-id="${PING.room}"><span class="meta"><b>${PING.doc}</b><small>“Please come to my office.” · ${PING.room}</small></span><span class="until">${t}</span></button>`).join('');
 };
-$('#pingList').addEventListener('click', e => { if (e.target.closest('[data-id]')) { const r = byId['C3-207']; S.sel = r; S.floor = r.f; drawRooms(); switchTab('map'); route(r); } });
+$('#pingList').addEventListener('click', e => { if (e.target.closest('[data-id]')) goPing(); });
 $('#toastClose').onclick = () => { clearTimeout(toastTimer); toast.classList.remove('show'); };
-$('#toastOpen').onclick = () => { clearTimeout(toastTimer); toast.classList.remove('show'); $('#alertBadge').hidden = true; const r = byId['C3-207']; S.sel = r; S.floor = r.f; drawRooms(); route(r); };
+$('#toastOpen').onclick = () => { clearTimeout(toastTimer); toast.classList.remove('show'); $('#alertBadge').hidden = true; goPing(); };
 
 /* ---------- boot ---------- */
 drawBase(); drawRooms(); renderFree();
 function boot(){
   const {w, h} = size(); if (!w || !h) return requestAnimationFrame(boot);
-  S.kMin = Math.min(w, h) / 1150;
-  const k = 1.1; S.view = {k, x: w/2 - 360*k, y: h*.42 - 520*k}; apply();
+  S.kMin = Math.min(w / 1200, h / 620) * .9;
+  const k = w / 640; S.view = {k, x: w/2 - 668*k, y: h*.45 - 430*k}; apply();
 }
 boot();
 })();
