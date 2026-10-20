@@ -20,6 +20,7 @@
   color-scheme: light;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{height:100%}
 body{margin:0;background:var(--desk);color:var(--ink);font-family:var(--body);display:flex;align-items:center;justify-content:center;
   padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:16px}
@@ -49,7 +50,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .timepop p{margin:0;color:#B9C6D3}
 
 /* map */
-main{position:relative;flex:1;min-height:0}
+main{position:relative;flex:1;min-height:0;overflow:hidden}
 #map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;background:var(--ground);font-family:var(--body);cursor:grab;display:block}
 #map:active{cursor:grabbing}
 .rooms{opacity:0;pointer-events:none;transition:opacity .25s}
@@ -59,7 +60,6 @@ main{position:relative;flex:1;min-height:0}
 .rlabel{opacity:0;transition:opacity .2s;pointer-events:none}
 .labels .rlabel{opacity:1}
 .room{cursor:pointer}
-.room.sel{stroke:var(--gold);stroke-width:3}
 .route{fill:none;stroke:var(--navy);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:2 9;animation:march 1s linear infinite}
 @keyframes march{to{stroke-dashoffset:-11}}
 .you-pulse{animation:pulse 1.8s ease-out infinite;transform-origin:center;transform-box:fill-box}
@@ -79,6 +79,10 @@ main{position:relative;flex:1;min-height:0}
 /* sheet */
 .sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -10px 30px rgba(19,38,59,.22);padding:10px 18px 18px;display:flex;flex-direction:column;gap:12px;max-height:62%;overflow-y:auto;transform:translateY(105%);transition:transform .3s ease;z-index:6}
 .sheet.open{transform:none}
+.sheet.compact{max-height:50%;gap:10px}
+.sheet.compact h2{font-size:22px}
+.sheet.compact .trip b{font-size:24px}
+.sheet.compact .steps li{font-size:13.5px}
 .grab{width:40px;height:4px;border-radius:4px;background:var(--line);align-self:center}
 .sh-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .eyebrow{margin:0;font-size:11.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);font-weight:600}
@@ -123,8 +127,10 @@ main{position:relative;flex:1;min-height:0}
 .note{font-size:12px;color:var(--muted);line-height:1.5}
 
 /* toast */
-.toast{position:absolute;left:12px;right:12px;top:12px;background:var(--navy);color:#F5F3EE;border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 14px 30px rgba(0,0,0,.35);z-index:30;transform:translateY(-140%);transition:transform .35s ease;border:0;text-align:left;width:auto}
-.toast.show{transform:none}
+.toast{position:absolute;left:12px;right:12px;top:12px;background:var(--navy);color:#F5F3EE;border-radius:16px;padding:6px 6px 6px 0;display:flex;gap:4px;align-items:center;box-shadow:0 14px 30px rgba(0,0,0,.35);z-index:30;transform:translateY(-160%);visibility:hidden;transition:transform .35s ease,visibility 0s .35s}
+.toast.show{transform:none;visibility:visible;transition:transform .35s ease}
+.toast-main{flex:1;min-width:0;display:flex;gap:12px;align-items:center;border:0;background:none;text-align:left;padding:6px 4px 6px 12px;color:inherit}
+.toast-x{flex:none;width:36px;height:36px;border:0;border-radius:50%;background:var(--navy2);color:#F5F3EE;font-size:15px;align-self:flex-start}
 .toast .av{width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--navy);display:grid;place-items:center;font-weight:700;font-family:var(--display);flex:none}
 .toast b{display:block;font-size:14px}
 .toast small{color:#B9C6D3;font-size:12.5px;line-height:1.4;display:block}
@@ -205,10 +211,11 @@ nav button[aria-selected="true"]::after{content:"";position:absolute;top:0;left:
       <p class="note">Prototype for the ZU World capstone. Building layout is illustrative and timetable data is sample data, not ZU’s real schedule.</p>
     </section>
 
-    <button class="toast" id="toast" aria-live="assertive">
-      <span class="av">MA</span>
-      <span><b>Dr. Mariam Al Hosani pinged you</b><small>“Please come to my office.” C3-207 · Tap for directions</small></span>
-    </button>
+    <div class="toast" id="toast" role="alert">
+      <button class="toast-main" id="toastOpen"><span class="av">MA</span>
+      <span><b>Dr. Mariam Al Hosani pinged you</b><small>“Please come to my office.” C3-207 · Tap for directions</small></span></button>
+      <button class="toast-x" id="toastClose" aria-label="Dismiss notification">✕</button>
+    </div>
   </main>
 
   <nav role="tablist">
@@ -434,7 +441,7 @@ function tap(t){
 
 /* ---------- sheet ---------- */
 const sheet = $('#sheet');
-function openSheet(html){ sheet.innerHTML = '<div class="grab"></div>' + html; sheet.classList.add('open'); const x = sheet.querySelector('.x'); if (x) x.onclick = closeSheet; }
+function openSheet(html){ if (!html.includes('Route to')) sheet.classList.remove('compact'); sheet.innerHTML = '<div class="grab"></div>' + html; sheet.classList.add('open'); const x = sheet.querySelector('.x'); if (x) x.onclick = closeSheet; }
 function closeSheet(){ sheet.classList.remove('open'); if (S.sel) { S.sel = null; drawRooms(); } $('#routeLayer').replaceChildren(); }
 function pillHTML(st){ const cls = st.busy ? 'busy' : st.neutral ? 'neutral' : 'free';
   const c = st.busy ? 'var(--busy)' : st.neutral ? 'var(--navy3)' : '#fff; border:1px solid var(--line)';
@@ -484,9 +491,10 @@ function route(r){
   const steps = [`Walk ${dir} across the Central Courtyard to ${b.c}`, `Enter ${b.name} by the courtyard door`];
   if (r.f > 0) steps.push(`Take the stairs or lift to ${floorName(r.f)}`);
   steps.push(`Follow the corridor. ${r.id} is on your ${sideTxt}`);
-  const k = Math.min(1.25, size().w / 560);
-  flyTo((YOU.x + r.cx)/2, (YOU.y + r.cy)/2, Math.max(.6, k), .3);
-  openSheet(`<div class="sh-head"><div><p class="eyebrow">Route to ${r.id}</p><h2>${r.t === 'office' ? r.doc + '’s office' : r.name}</h2></div><button class="x" aria-label="Close">✕</button></div>
+  const xs = pts2.map(p => p[0]), ys = pts2.map(p => p[1]), bw = Math.max(...xs) - Math.min(...xs) + 60, bh = Math.max(...ys) - Math.min(...ys) + 60;
+  const sz = size(), fit = Math.min(sz.w / bw, (sz.h * .48) / bh);
+  flyTo((Math.max(...xs) + Math.min(...xs))/2, (Math.max(...ys) + Math.min(...ys))/2, Math.min(2.2, Math.max(1.06, fit)), .26);
+  sheet.classList.add('compact'); openSheet(`<div class="sh-head"><div><p class="eyebrow">Route to ${r.id}</p><h2>${r.t === 'office' ? r.doc + '’s office' : r.name}</h2></div><button class="x" aria-label="Close">✕</button></div>
     <div class="trip"><div><b>${mins} min</b> <span>walk</span></div><div><b>${meters} m</b></div></div>
     <ol class="steps">${steps.map(s => `<li>${s}</li>`).join('')}</ol>
     <div class="actions"><button class="btn ghost" id="endRoute">End route</button><button class="btn primary" id="zoomDoor">Zoom to door</button></div>`);
@@ -557,14 +565,15 @@ $('#simPing').onclick = () => {
   $('#pingList').innerHTML = S.pings.map(t => `<button class="row" data-id="C3-207"><span class="meta"><b>Dr. Mariam Al Hosani</b><small>“Please come to my office.” · C3-207</small></span><span class="until">${t}</span></button>`).join('');
 };
 $('#pingList').addEventListener('click', e => { if (e.target.closest('[data-id]')) { const r = byId['C3-207']; S.sel = r; S.floor = r.f; drawRooms(); switchTab('map'); route(r); } });
-toast.onclick = () => { toast.classList.remove('show'); $('#alertBadge').hidden = true; const r = byId['C3-207']; S.sel = r; S.floor = r.f; drawRooms(); route(r); };
+$('#toastClose').onclick = () => { clearTimeout(toastTimer); toast.classList.remove('show'); };
+$('#toastOpen').onclick = () => { clearTimeout(toastTimer); toast.classList.remove('show'); $('#alertBadge').hidden = true; const r = byId['C3-207']; S.sel = r; S.floor = r.f; drawRooms(); route(r); };
 
 /* ---------- boot ---------- */
 drawBase(); drawRooms(); renderFree();
 function boot(){
   const {w, h} = size(); if (!w || !h) return requestAnimationFrame(boot);
   S.kMin = Math.min(w, h) / 1150;
-  const k = 1.25; S.view = {k, x: w/2 - 300*k, y: h*.45 - 520*k}; apply();
+  const k = 1.1; S.view = {k, x: w/2 - 360*k, y: h*.42 - 520*k}; apply();
 }
 boot();
 })();
